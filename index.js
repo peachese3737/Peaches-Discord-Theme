@@ -116,34 +116,67 @@
     return replacement + alpha;
   }
 
+  let retryTimer = null;
+  let installed = false;
+  let attempts = 0;
+
+  function installPatches() {
+    if (installed) return true;
+
+    // Resolve these at installation time rather than only when the plugin file
+    // is evaluated. During some Discord/Revenge starts the modules appear later.
+    const liveTokens = vendetta.metro.findByProps("SemanticColor");
+    const liveResolver = liveTokens?.default?.meta ?? liveTokens?.default?.internal;
+    const liveReactNative = vendetta.metro.common.ReactNative;
+
+    if (!liveResolver?.resolveSemanticColor) return false;
+
+    unpatches.push(
+      after("resolveSemanticColor", liveResolver, (args, result) =>
+        semanticOverride(args) ?? recolorNeutral(result)
+      )
+    );
+
+    // Preserve the existing direct React Native colour patch.
+    if (liveReactNative?.processColor) {
+      unpatches.push(
+        instead("processColor", liveReactNative, function (args, original) {
+          if (typeof args[0] === "string" || typeof args[0] === "number") {
+            args[0] = recolorNeutral(args[0]);
+          }
+          return original.apply(this, args);
+        })
+      );
+    }
+
+    installed = true;
+    return true;
+  }
+
   return {
     onLoad() {
-      if (!resolver?.resolveSemanticColor) {
-        throw new Error("Discords Farbauflösung wurde nicht gefunden.");
-      }
+      // Try immediately. If Discord has not finished exposing its colour
+      // resolver yet, retry every 500 ms for up to 10 seconds.
+      if (installPatches()) return;
 
-      unpatches.push(
-        after("resolveSemanticColor", resolver, (args, result) =>
-          semanticOverride(args) ?? recolorNeutral(result)
-        )
-      );
-
-      // Some newer Discord components feed colours directly into React
-      // Native instead of using semantic tokens. This catches those greys,
-      // including attachment cards and a few navigation/profile surfaces.
-      if (ReactNative?.processColor) {
-        unpatches.push(
-          instead("processColor", ReactNative, function (args, original) {
-            if (typeof args[0] === "string" || typeof args[0] === "number") {
-              args[0] = recolorNeutral(args[0]);
-            }
-            return original.apply(this, args);
-          })
-        );
-      }
+      attempts = 0;
+      retryTimer = setInterval(() => {
+        attempts += 1;
+        if (installPatches() || attempts >= 20) {
+          clearInterval(retryTimer);
+          retryTimer = null;
+        }
+      }, 500);
     },
 
     onUnload() {
+      if (retryTimer) {
+        clearInterval(retryTimer);
+        retryTimer = null;
+      }
+
+      installed = false;
+      attempts = 0;
       unpatches.splice(0).forEach(unpatch => unpatch());
     }
   };
