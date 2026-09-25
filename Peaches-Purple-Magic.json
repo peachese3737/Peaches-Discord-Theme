@@ -1,6 +1,6 @@
 {
   "name": "Peaches Purple Magic",
-  "description": "Magisches Onyx-Theme mit schwarzer Serverleiste, rosa Namen, Altrosa, Flieder und Gold – Version 8",
+  "description": "Magisches Onyx-Theme mit Onyx-Serverleiste, dunkler Chatliste, violetter Kopfleiste und rosa Namen – Version 9",
   "authors": [
     {
       "name": "Peaches"
@@ -10,11 +10,12 @@
   "semanticColors": {
     "ANDROID_RIPPLE": ["#8E5AA8"],
     "CHAT_BACKGROUND": ["#160A24"],
-    "HEADER_PRIMARY": ["#F1B3CF"],
+    "HEADER_PRIMARY": ["#F0A0C8"],
     "HEADER_SECONDARY": ["#DCA6C5"],
     "TEXT_PRIMARY": ["#F4E9FF"],
+    "TEXT_STRONG": ["#F0A0C8"],
     "TEXT_NORMAL": ["#F1E8F7"],
-    "TEXT_MUTED": ["#CDAFCF"],
+    "TEXT_MUTED": ["#AF88B8"],
     "TEXT_LINK": ["#F0A6C7"],
     "INTERACTIVE_NORMAL": ["#D8B8E5"],
     "INTERACTIVE_HOVER": ["#F0A6C7"],
@@ -104,7 +105,7 @@
   "rawColors": {
     "BLACK": "#09070D",
     "BLACK_460": "#0B0810",
-    "PRIMARY_100": "#F1B3CF",
+    "PRIMARY_100": "#F0A0C8",
     "PRIMARY_200": "#E5D6F1",
     "PRIMARY_300": "#CFB9DE",
     "PRIMARY_330": "#C3A9D5",
@@ -116,7 +117,7 @@
     "PRIMARY_600": "#4A245D",
     "PRIMARY_630": "#3A1B4C",
     "PRIMARY_645": "#51285D",
-    "PRIMARY_660": "#5A2947",
+    "PRIMARY_660": "#32162F",
     "PRIMARY_700": "#050407",
     "PRIMARY_730": "#643276",
     "PRIMARY_800": "#0B0710",
