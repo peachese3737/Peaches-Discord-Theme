@@ -1,183 +1,154 @@
 (() => {
   const { after, instead } = vendetta.patcher;
-  const tokens = vendetta.metro.findByProps("SemanticColor");
-  const resolver = tokens?.default?.meta ?? tokens?.default?.internal;
-  const ReactNative = vendetta.metro.common.ReactNative;
-
   const unpatches = [];
+  const wanted = new Set([
+    "CHANNELS_DEFAULT", "TEXT_MUTED", "PANEL_BG", "BACKGROUND_SECONDARY_ALT",
+    "BACKGROUND_PRIMARY", "BACKGROUND_MOBILE_PRIMARY", "BG_BASE_PRIMARY", "BACKGROUND_BASE_LOW"
+  ]);
 
-  function getSemanticName(args) {
-    const candidates = ["name", "key", "id", "token", "semanticColor", "color"];
-    const wanted = new Set([
-      "CHANNELS_DEFAULT",
-      "TEXT_MUTED",
-      "PANEL_BG",
-      "BACKGROUND_SECONDARY_ALT",
-      "BACKGROUND_PRIMARY",
-      "BACKGROUND_MOBILE_PRIMARY",
-      "BG_BASE_PRIMARY",
-      "BACKGROUND_BASE_LOW"
-    ]);
-
+  function semanticName(args) {
+    const keys = ["name", "key", "id", "token", "semanticColor", "color"];
     for (const arg of args) {
-      if (typeof arg === "string") {
-        const name = arg.toUpperCase();
-        if (wanted.has(name)) return name;
-      }
-
+      if (typeof arg === "string" && wanted.has(arg.toUpperCase())) return arg.toUpperCase();
       if (typeof arg === "symbol") {
-        const name = String(arg.description ?? "").toUpperCase();
-        if (wanted.has(name)) return name;
+        const n = String(arg.description || "").toUpperCase();
+        if (wanted.has(n)) return n;
       }
-
-      if (arg && typeof arg === "object") {
-        for (const candidate of candidates) {
-          if (typeof arg[candidate] === "string") {
-            const name = arg[candidate].toUpperCase();
-            if (wanted.has(name)) return name;
-          }
-        }
+      if (arg && typeof arg === "object") for (const k of keys) {
+        if (typeof arg[k] === "string" && wanted.has(arg[k].toUpperCase())) return arg[k].toUpperCase();
       }
     }
-
     return "";
   }
 
   function semanticOverride(args) {
-    const name = getSemanticName(args);
-
-    if (name === "CHANNELS_DEFAULT") return "#D69AB4";
-    if (name === "TEXT_MUTED") return "#B596C8";
-    if (name === "PANEL_BG" || name === "BACKGROUND_SECONDARY_ALT") {
-      return "#5A2947";
-    }
-    if (
-      name === "BACKGROUND_PRIMARY" ||
-      name === "BACKGROUND_MOBILE_PRIMARY" ||
-      name === "BG_BASE_PRIMARY" ||
-      name === "BACKGROUND_BASE_LOW"
-    ) {
-      return "#32162F";
-    }
-
+    const n = semanticName(args);
+    if (n === "CHANNELS_DEFAULT") return "#D69AB4";
+    if (n === "TEXT_MUTED") return "#B596C8";
+    if (n === "PANEL_BG" || n === "BACKGROUND_SECONDARY_ALT") return "#5A2947";
+    if (["BACKGROUND_PRIMARY", "BACKGROUND_MOBILE_PRIMARY", "BG_BASE_PRIMARY", "BACKGROUND_BASE_LOW"].includes(n)) return "#32162F";
     return null;
   }
 
-  function recolorNeutral(value) {
-    if (typeof value === "number") {
-      const unsigned = value >>> 0;
-      // React Native accepts numeric colours as 0xRRGGBBAA before
-      // processColor converts them to Android's internal representation.
-      const red = (unsigned >>> 24) & 255;
-      const green = (unsigned >>> 16) & 255;
-      const blue = (unsigned >>> 8) & 255;
-      const alpha = unsigned & 255;
-      const source = `#${red.toString(16).padStart(2, "0")}${green
-        .toString(16)
-        .padStart(2, "0")}${blue.toString(16).padStart(2, "0")}`;
-      const replacement = recolorNeutral(source);
-
-      if (replacement === source) return value;
-
-      const rgb = Number.parseInt(replacement.slice(1, 7), 16);
-      return (((rgb << 8) | alpha) >>> 0);
-    }
-
-    if (typeof value !== "string") return value;
-
-    const match = value.match(/^#([0-9a-f]{6})([0-9a-f]{2})?$/i);
-    if (!match) return value;
-
-    const rgb = match[1];
-    const alpha = match[2] ?? "";
-    const red = Number.parseInt(rgb.slice(0, 2), 16);
-    const green = Number.parseInt(rgb.slice(2, 4), 16);
-    const blue = Number.parseInt(rgb.slice(4, 6), 16);
-    const maximum = Math.max(red, green, blue);
-    const minimum = Math.min(red, green, blue);
-    const brightness = (red + green + blue) / 3;
-
-    // Only replace genuinely neutral Discord greys. Existing purple, pink,
-    // gold, avatars and wallpapers stay untouched.
-    if (maximum - minimum > 16) return value;
-
-    let replacement;
-    if (brightness <= 14) replacement = "#030204";       // True Onyx / server rail
-    else if (brightness <= 24) replacement = "#050407";  // Almost black
-    else if (brightness <= 36) replacement = "#1C0D2A";  // Deep violet / chat header
-    else if (brightness <= 50) replacement = "#5A2947";  // Old rose / profile panel
-    else if (brightness <= 68) replacement = "#5A2C50";  // Plum rose cards
-    else if (brightness <= 95) replacement = "#7A436D";  // Dusky rose
-    else if (brightness <= 130) replacement = "#A07CAD"; // Muted lilac
-    else if (brightness <= 175) replacement = "#D0A9D9"; // Lilac
-    else if (brightness <= 215) replacement = "#D69AB4"; // Muted old rose / names
-    else return value;
-
-    return replacement + alpha;
+  function replacementForRGB(r, g, b) {
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    if (max - min > 16) return null;
+    const v = (r + g + b) / 3;
+    if (v <= 14) return [3,2,4];
+    if (v <= 24) return [5,4,7];
+    if (v <= 36) return [28,13,42];
+    if (v <= 50) return [90,41,71];
+    if (v <= 68) return [90,44,80];
+    if (v <= 95) return [122,67,109];
+    if (v <= 130) return [160,124,173];
+    if (v <= 175) return [208,169,217];
+    if (v <= 215) return [214,154,180];
+    return null;
   }
 
-  let retryTimer = null;
-  let installed = false;
-  let attempts = 0;
+  function hex2(n) { return n.toString(16).padStart(2, "0"); }
 
-  function installPatches() {
-    if (installed) return true;
+  function recolorString(value) {
+    if (typeof value !== "string") return value;
+    const m = value.match(/^#([0-9a-f]{6})([0-9a-f]{2})?$/i);
+    if (!m) return value;
+    const rgb = m[1];
+    const r = parseInt(rgb.slice(0,2),16), g = parseInt(rgb.slice(2,4),16), b = parseInt(rgb.slice(4,6),16);
+    const rep = replacementForRGB(r,g,b);
+    return rep ? `#${hex2(rep[0])}${hex2(rep[1])}${hex2(rep[2])}${m[2] || ""}` : value;
+  }
 
-    // Resolve these at installation time rather than only when the plugin file
-    // is evaluated. During some Discord/Revenge starts the modules appear later.
-    const liveTokens = vendetta.metro.findByProps("SemanticColor");
-    const liveResolver = liveTokens?.default?.meta ?? liveTokens?.default?.internal;
-    const liveReactNative = vendetta.metro.common.ReactNative;
+  // RN input colour: 0xRRGGBBAA.
+  function recolorRNInputNumber(value) {
+    if (typeof value !== "number") return value;
+    const u = value >>> 0;
+    const r=(u>>>24)&255, g=(u>>>16)&255, b=(u>>>8)&255, a=u&255;
+    const rep = replacementForRGB(r,g,b);
+    if (!rep) return value;
+    return ((((rep[0]<<24) | (rep[1]<<16) | (rep[2]<<8) | a)) >>> 0);
+  }
 
-    if (!liveResolver?.resolveSemanticColor) return false;
+  // Android/native processed colour: 0xAARRGGBB.
+  function recolorNativeNumber(value) {
+    if (typeof value !== "number") return value;
+    const u = value >>> 0;
+    const a=(u>>>24)&255, r=(u>>>16)&255, g=(u>>>8)&255, b=u&255;
+    const rep = replacementForRGB(r,g,b);
+    if (!rep) return value;
+    return ((a<<24) | (rep[0]<<16) | (rep[1]<<8) | rep[2]) | 0;
+  }
 
-    unpatches.push(
-      after("resolveSemanticColor", liveResolver, (args, result) =>
-        semanticOverride(args) ?? recolorNeutral(result)
-      )
-    );
+  function recolorInput(v) {
+    return typeof v === "string" ? recolorString(v) : recolorRNInputNumber(v);
+  }
 
-    // Preserve the existing direct React Native colour patch.
-    if (liveReactNative?.processColor) {
-      unpatches.push(
-        instead("processColor", liveReactNative, function (args, original) {
-          if (typeof args[0] === "string" || typeof args[0] === "number") {
-            args[0] = recolorNeutral(args[0]);
-          }
-          return original.apply(this, args);
-        })
-      );
+  const colorKey = /(?:^color$|color$|tintcolor$|shadowcolor$|overlaycolor$)/i;
+  function sanitizeNative(value, key, depth=0) {
+    if (depth > 6 || value == null) return value;
+    if (colorKey.test(String(key || ""))) {
+      if (typeof value === "number") return recolorNativeNumber(value);
+      if (typeof value === "string") return recolorString(value);
+    }
+    if (Array.isArray(value)) {
+      let changed=false;
+      const out=value.map((x,i)=>{ const y=sanitizeNative(x,i,depth+1); if(y!==x) changed=true; return y; });
+      return changed ? out : value;
+    }
+    if (typeof value === "object") {
+      let out=value, changed=false;
+      for (const k of Object.keys(value)) {
+        const y=sanitizeNative(value[k],k,depth+1);
+        if (y!==value[k]) { if(!changed) out={...value}; out[k]=y; changed=true; }
+      }
+      return out;
+    }
+    return value;
+  }
+
+  function install() {
+    const tokens = vendetta.metro.findByProps("SemanticColor");
+    const resolver = tokens?.default?.meta ?? tokens?.default?.internal;
+    if (resolver?.resolveSemanticColor) {
+      unpatches.push(after("resolveSemanticColor", resolver, (args, result) => semanticOverride(args) ?? (typeof result === "string" ? recolorString(result) : result)));
     }
 
-    installed = true;
-    return true;
+    const RN = vendetta.metro.common.ReactNative;
+    if (RN?.processColor) {
+      unpatches.push(instead("processColor", RN, function(args, original) {
+        if (typeof args[0] === "string" || typeof args[0] === "number") args[0] = recolorInput(args[0]);
+        return original.apply(this,args);
+      }));
+    }
+
+    // Discord creates many styles lazily after startup. Patch StyleSheet.create so
+    // those late-created screens cannot fall back to neutral grey.
+    if (RN?.StyleSheet?.create) {
+      unpatches.push(instead("create", RN.StyleSheet, function(args, original) {
+        if (args[0] && typeof args[0] === "object") args[0] = sanitizeNative(args[0], "style");
+        return original.apply(this,args);
+      }));
+    }
+
+    // Final native-view funnel. This catches colours from components that captured
+    // old resolver/processColor references before this plugin loaded.
+    const payload = vendetta.metro.findByProps("create", "diff");
+    if (payload?.create) {
+      unpatches.push(instead("create", payload, function(args, original) {
+        if (args[0] && typeof args[0] === "object") args[0] = sanitizeNative(args[0], "props");
+        return original.apply(this,args);
+      }));
+    }
+    if (payload?.diff) {
+      unpatches.push(instead("diff", payload, function(args, original) {
+        if (args[0] && typeof args[0] === "object") args[0] = sanitizeNative(args[0], "props");
+        if (args[1] && typeof args[1] === "object") args[1] = sanitizeNative(args[1], "props");
+        return original.apply(this,args);
+      }));
+    }
   }
 
   return {
-    onLoad() {
-      // Try immediately. If Discord has not finished exposing its colour
-      // resolver yet, retry every 500 ms for up to 10 seconds.
-      if (installPatches()) return;
-
-      attempts = 0;
-      retryTimer = setInterval(() => {
-        attempts += 1;
-        if (installPatches() || attempts >= 20) {
-          clearInterval(retryTimer);
-          retryTimer = null;
-        }
-      }, 500);
-    },
-
-    onUnload() {
-      if (retryTimer) {
-        clearInterval(retryTimer);
-        retryTimer = null;
-      }
-
-      installed = false;
-      attempts = 0;
-      unpatches.splice(0).forEach(unpatch => unpatch());
-    }
+    onLoad() { install(); },
+    onUnload() { unpatches.splice(0).reverse().forEach(fn => { try { fn(); } catch {} }); }
   };
 })()
