@@ -1,13 +1,13 @@
 {
   "name": "Peaches Onyx Fix",
-  "description": "Färbt auch Android-Farbzahlen in Onyx, Altrosa und Flieder um; passend zu Peaches Purple Magic v11.",
+  "description": "Trennt Chatlisten-Hintergrund, Altrosa-Namen und pastell-lila Vorschautexte gezielt; passend zu Peaches Purple Magic v12.",
   "authors": [
     {
       "name": "Peaches"
     }
   ],
   "main": "index.js",
-  "hash": "7f3c69b7e49265745e31e86d5340e2af345c6224d3f1f002febee4651c897921",
+  "hash": "fcbd71732eb952aafae17886afe3d766938bbf6b70bbf1a302b7ca1ab5e418ec",
   "vendetta": {
     "icon": "ic_theme_24px"
   }

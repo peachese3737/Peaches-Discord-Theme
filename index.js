@@ -6,6 +6,63 @@
 
   const unpatches = [];
 
+  function getSemanticName(args) {
+    const candidates = ["name", "key", "id", "token", "semanticColor", "color"];
+    const wanted = new Set([
+      "CHANNELS_DEFAULT",
+      "TEXT_MUTED",
+      "PANEL_BG",
+      "BACKGROUND_SECONDARY_ALT",
+      "BACKGROUND_PRIMARY",
+      "BACKGROUND_MOBILE_PRIMARY",
+      "BG_BASE_PRIMARY",
+      "BACKGROUND_BASE_LOW"
+    ]);
+
+    for (const arg of args) {
+      if (typeof arg === "string") {
+        const name = arg.toUpperCase();
+        if (wanted.has(name)) return name;
+      }
+
+      if (typeof arg === "symbol") {
+        const name = String(arg.description ?? "").toUpperCase();
+        if (wanted.has(name)) return name;
+      }
+
+      if (arg && typeof arg === "object") {
+        for (const candidate of candidates) {
+          if (typeof arg[candidate] === "string") {
+            const name = arg[candidate].toUpperCase();
+            if (wanted.has(name)) return name;
+          }
+        }
+      }
+    }
+
+    return "";
+  }
+
+  function semanticOverride(args) {
+    const name = getSemanticName(args);
+
+    if (name === "CHANNELS_DEFAULT") return "#D69AB4";
+    if (name === "TEXT_MUTED") return "#B596C8";
+    if (name === "PANEL_BG" || name === "BACKGROUND_SECONDARY_ALT") {
+      return "#5A2947";
+    }
+    if (
+      name === "BACKGROUND_PRIMARY" ||
+      name === "BACKGROUND_MOBILE_PRIMARY" ||
+      name === "BG_BASE_PRIMARY" ||
+      name === "BACKGROUND_BASE_LOW"
+    ) {
+      return "#32162F";
+    }
+
+    return null;
+  }
+
   function recolorNeutral(value) {
     if (typeof value === "number") {
       const unsigned = value >>> 0;
@@ -66,8 +123,8 @@
       }
 
       unpatches.push(
-        after("resolveSemanticColor", resolver, (_args, result) =>
-          recolorNeutral(result)
+        after("resolveSemanticColor", resolver, (args, result) =>
+          semanticOverride(args) ?? recolorNeutral(result)
         )
       );
 

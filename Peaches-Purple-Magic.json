@@ -1,6 +1,6 @@
 {
   "name": "Peaches Purple Magic",
-  "description": "Magisches Onyx-Theme mit dunkler Chatübersicht, Altrosa-Namen und pastell-lila Vorschautexten – Version 11",
+  "description": "Magisches Onyx-Theme mit gezielter dunkler Chatübersicht, Altrosa-Namen und pastell-lila Vorschautexten – Version 12",
   "authors": [
     {
       "name": "Peaches"
@@ -166,7 +166,7 @@
     "RED_400": "#FF6F9F",
     "YELLOW_300": "#D8B97C",
     "WHITE": "#F4E9FF",
-    "WHITE_500": "#F4E9FF",
+    "WHITE_500": "#D69AB4",
     "WHITE_630": "#BBA3CC"
   },
   "background": {
