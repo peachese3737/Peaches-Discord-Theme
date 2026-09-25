@@ -1,13 +1,13 @@
 {
   "name": "Peaches Onyx Fix",
-  "description": "Stabiler Mauve-/Onyx-Farbfix für Revenge Classic und aktuelle Discord-Android-Builds.",
+  "description": "Stabiler Mauve-/Onyx-Farbfix mit sichtbarem Theme-Hintergrund für Revenge Classic.",
   "authors": [
     {
       "name": "Peaches"
     }
   ],
   "main": "index.js",
-  "hash": "c62b1cb7bf74a06b503f0057d0e09d62d7e9d95bf9b27c84d99dc8e606e868a9",
+  "hash": "a13f4b96730d23ef0f8c48071944d69a4e48db8091901bb82d8eff90a2b66075",
   "vendetta": {
     "icon": "ic_theme_24px"
   }

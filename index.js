@@ -15,10 +15,12 @@
     TEXT_MUTED: "#B596C8",
     PANEL_BG: "#5A2947",
     BACKGROUND_SECONDARY_ALT: "#5A2947",
-    BACKGROUND_PRIMARY: "#32162F",
-    BACKGROUND_MOBILE_PRIMARY: "#32162F",
-    BG_BASE_PRIMARY: "#32162F",
-    BACKGROUND_BASE_LOW: "#32162F"
+    // Keep the main chat layers mauve, but translucent enough for the
+    // configured theme wallpaper to remain visible underneath.
+    BACKGROUND_PRIMARY: "#32162F99",
+    BACKGROUND_MOBILE_PRIMARY: "#32162F99",
+    BG_BASE_PRIMARY: "#32162F99",
+    BACKGROUND_BASE_LOW: "#32162F99"
   };
 
   const SEMANTIC_NAMES = new Set(Object.keys(SEMANTIC_OVERRIDES));
