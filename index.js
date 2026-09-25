@@ -1,216 +1,265 @@
 (() => {
+  "use strict";
+  // Peaches 15: API repairs + restoration. No native payload hooks.
+  const VERSION = "15.0";
   const { after, instead } = vendetta.patcher;
-  const tokens = vendetta.metro.findByProps("SemanticColor");
+  const metro = vendetta.metro;
+  const tokens = metro.findByProps("SemanticColor");
   const resolver = tokens?.default?.meta ?? tokens?.default?.internal;
-  const ReactNative = vendetta.metro.common.ReactNative;
-  const React = vendetta.metro.common.React;
-
+  const { React, ReactNative: RN, clipboard } = metro.common;
   const unpatches = [];
-  const styleCache = new WeakMap();
+  const stats = { resolver: 0, named: 0, elements: 0, changed: 0, hooks: [], failures: [] };
+  const observed = new Map();
+  let recording = false;
+  let timer;
+  let active = false;
 
-  function getSemanticName(args) {
-    const candidates = ["name", "key", "id", "token", "semanticColor", "color"];
-    const wanted = new Set([
-      "CHANNELS_DEFAULT",
-      "TEXT_MUTED",
-      "PANEL_BG",
-      "BACKGROUND_SECONDARY_ALT",
-      "BACKGROUND_MOBILE_SECONDARY",
-      "BACKGROUND_PRIMARY",
-      "BACKGROUND_MOBILE_PRIMARY",
-      "BG_BASE_PRIMARY",
-      "BACKGROUND_BASE_LOW"
-    ]);
+  const palette = Object.freeze({
+    name: "#F0A0C8", preview: "#C4A7D6", header: "#1C0D2A",
+    composer: "#3B1A2E", panel: "#5A2947", button: "#9B4F84"
+  });
 
-    for (const arg of args) {
-      if (typeof arg === "string") {
-        const name = arg.toUpperCase();
-        if (wanted.has(name)) return name;
+  // Revenge 1b1d297: colors/patches/resolver.ts, extractInfo(). The token's
+  // name is the VALUE of a symbol-keyed property, not the symbol description.
+  function semanticName(value) {
+    if (!value || typeof value !== "object") return "";
+    try {
+      for (const symbol of Object.getOwnPropertySymbols(value)) {
+        const name = value[symbol];
+        if (typeof name === "string" &&
+            Object.prototype.hasOwnProperty.call(tokens.SemanticColor, name)) return name;
       }
-
-      if (typeof arg === "symbol") {
-        const name = String(arg.description ?? "").toUpperCase();
-        if (wanted.has(name)) return name;
-      }
-
-      if (arg && typeof arg === "object") {
-        for (const candidate of candidates) {
-          if (typeof arg[candidate] === "string") {
-            const name = arg[candidate].toUpperCase();
-            if (wanted.has(name)) return name;
-          }
-        }
-      }
-    }
-
+    } catch { /* An unrelated/dynamic native colour is not a semantic token. */ }
     return "";
   }
 
-  function semanticOverride(args) {
-    const name = getSemanticName(args);
-
-    if (name === "CHANNELS_DEFAULT") return "#E9A0BE";
-    if (name === "TEXT_MUTED") return "#C4A7D6";
-    if (name === "BACKGROUND_MOBILE_SECONDARY") return "#351923";
-    if (name === "PANEL_BG" || name === "BACKGROUND_SECONDARY_ALT") {
-      return "#351923";
-    }
-    if (
-      name === "BACKGROUND_PRIMARY" ||
-      name === "BACKGROUND_MOBILE_PRIMARY" ||
-      name === "BG_BASE_PRIMARY" ||
-      name === "BACKGROUND_BASE_LOW"
-    ) {
-      return "#32162F";
-    }
-
-    return null;
+  function hexParts(value) {
+    if (typeof value !== "string") return null;
+    const match = /^#([0-9a-f]{6})([0-9a-f]{2})?$/i.exec(value);
+    if (!match) return null;
+    const rgb = parseInt(match[1], 16);
+    return { r: rgb >>> 16, g: (rgb >>> 8) & 255, b: rgb & 255,
+      alpha: match[2] || "" };
   }
 
-  function replaceKnownColor(value, numericFormat = "argb") {
-    if (typeof value === "number") {
-      const unsigned = value >>> 0;
-      const isArgb = numericFormat === "argb";
-      const alpha = isArgb ? (unsigned >>> 24) & 255 : unsigned & 255;
-      const red = isArgb ? (unsigned >>> 16) & 255 : (unsigned >>> 24) & 255;
-      const green = isArgb ? (unsigned >>> 8) & 255 : (unsigned >>> 16) & 255;
-      const blue = isArgb ? unsigned & 255 : (unsigned >>> 8) & 255;
-      const source = `#${red.toString(16).padStart(2, "0")}${green
-        .toString(16)
-        .padStart(2, "0")}${blue.toString(16).padStart(2, "0")}`;
-      const replacement = replaceKnownColor(source, numericFormat);
+  function neutral(value) {
+    const p = hexParts(value);
+    return p && Math.max(p.r, p.g, p.b) - Math.min(p.r, p.g, p.b) <= 16;
+  }
 
-      if (replacement === source) return value;
+  function withAlpha(replacement, original) {
+    return replacement + (hexParts(original)?.alpha || "");
+  }
 
-      const rgb = Number.parseInt(replacement.slice(1, 7), 16);
-      return isArgb
-        ? (((alpha << 24) | rgb) >>> 0)
-        : (((rgb << 8) | alpha) >>> 0);
+  // Restore the proven 17:28 conversion for grey chrome, but retain black
+  // verbatim. Existing rose/lilac backgrounds and bright message text bypass it.
+  // A grey alone CANNOT distinguish a profile panel from an input field.
+  function restoreGrey(value) {
+    const p = hexParts(value);
+    if (!p || !neutral(value)) return value;
+    const brightness = (p.r + p.g + p.b) / 3;
+    let target;
+    if (brightness <= 24) return value;
+    if (brightness <= 36) target = palette.header;
+    else if (brightness <= 50) target = palette.composer;
+    else if (brightness <= 68) target = "#5A2C50";
+    else if (brightness <= 95) target = "#7A436D";
+    else if (brightness <= 130) target = "#A07CAD";
+    else if (brightness <= 175) target = palette.preview;
+    else if (brightness <= 215) target = palette.name;
+    else return value; // White message text must NOT become pink.
+    return target + p.alpha;
+  }
+
+  function colour(value) {
+    // React Native JS styles and processColor INPUT use RRGGBBAA, not ARGB.
+    // Leave resolver numbers alone: its contract is a string, not native ARGB.
+    if (typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 0xffffffff) {
+      const hex = "#" + value.toString(16).padStart(8, "0");
+      const next = colour(hex);
+      return next === hex ? value : parseInt(next.slice(1), 16);
     }
-
     if (typeof value !== "string") return value;
-
-    const match = value.match(/^#([0-9a-f]{6})([0-9a-f]{2})?$/i);
-    if (!match) return value;
-
-    const rgb = match[1];
-    const alpha = match[2] ?? "";
-    const red = Number.parseInt(rgb.slice(0, 2), 16);
-    const green = Number.parseInt(rgb.slice(2, 4), 16);
-    const blue = Number.parseInt(rgb.slice(4, 6), 16);
-    const source = `#${rgb.toLowerCase()}`;
-    const replacements = {
-      "#252429": "#5A2947", // bottom profile panel -> lighter old rose
-      "#b5bac1": "#F0A0C8", // regular DM names -> pink
-      "#dbdee1": "#F0A0C8", // brighter DM-name variant -> pink
-      "#949ba4": "#C4A7D6", // preview/activity text -> pastel lilac
-      "#80848e": "#A982AD"  // strongly muted preview text -> muted lilac
-    };
-    const replacement = replacements[source];
-    return replacement ? replacement + alpha : value;
+    // Existing Discord brand blue only; never globally replace purple colours.
+    if (/^#5865f2([0-9a-f]{2})?$/i.test(value)) return withAlpha(palette.button, value);
+    return restoreGrey(value);
   }
 
-  function recolorStyle(style) {
+  function semanticColour(name, original) {
+    if (typeof original !== "string") return original;
+    if (name === "CHANNELS_DEFAULT" || name === "REDESIGN_CHANNEL_NAME_TEXT") {
+      return withAlpha(palette.name, original);
+    }
+    // Only override a grey PANEL_BG. A coloured result may be the already
+    // approved DM background (#351923), so never replace that by assumption.
+    if (name === "PANEL_BG" && neutral(original)) return withAlpha(palette.panel, original);
+    return colour(original);
+  }
+
+  function colourLabel(value) {
+    if (typeof value === "string" && /^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(value)) return value;
+    if (typeof value === "number" && Number.isFinite(value)) return "0x" + (value >>> 0).toString(16);
+    return typeof value;
+  }
+
+  // Explicit opt-in, bounded, memory-only. No text, children, IDs, URLs,
+  // accessibility labels, props dumps, network requests or persisted telemetry.
+  function note(source, name, before, next) {
+    if (!recording) return;
+    const key = `${source} ${name || "unbekannt"}: ${colourLabel(before)} -> ${colourLabel(next)}`;
+    if (observed.has(key)) observed.set(key, observed.get(key) + 1);
+    else if (observed.size < 160) observed.set(key, 1);
+  }
+
+  function componentName(type) {
+    const name = typeof type === "string" ? type : type?.displayName || type?.name;
+    return typeof name === "string" && /^[A-Za-z_$][A-Za-z0-9_.$-]{0,70}$/.test(name)
+      ? name : "Komponente";
+  }
+
+  function recolorStyle(style, owner) {
     if (style == null) return style;
-
-    if (typeof style === "object" && !Array.isArray(style)) {
-      const cached = styleCache.get(style);
-      if (cached) return cached;
-    }
-
     let flat;
-    try {
-      flat = ReactNative?.StyleSheet?.flatten?.(style) ?? style;
-    } catch {
-      return style;
-    }
+    try { flat = RN.StyleSheet.flatten(style); } catch { return style; }
     if (!flat || typeof flat !== "object") return style;
-
-    let changed = false;
-    const next = { ...flat };
+    let next;
     for (const key of ["color", "backgroundColor"]) {
-      const value = next[key];
+      const value = flat[key];
+      // Semantic/dynamic native colour objects are resolved by their owner.
       if (typeof value !== "string" && typeof value !== "number") continue;
-      const replacement = replaceKnownColor(value, "argb");
-      if (replacement !== value) {
-        next[key] = replacement;
-        changed = true;
+      const result = colour(value);
+      note("style", owner + "." + key, value, result);
+      if (result !== value) {
+        next ??= { ...flat };
+        next[key] = result;
+        stats.changed++;
       }
     }
-
-    const result = changed ? next : style;
-    if (typeof style === "object" && !Array.isArray(style)) {
-      styleCache.set(style, result);
-    }
-    return result;
+    return next || style;
   }
 
-  function recolorProps(props) {
-    if (!props || typeof props !== "object" || props.style == null) return props;
-    const style = recolorStyle(props.style);
-    return style === props.style ? props : { ...props, style };
-  }
-
-  function patchElementFactory(module, key) {
+  function patchFactory(module, key, seen) {
     if (!module || typeof module[key] !== "function") return;
+    let keys = seen.get(module);
+    if (keys?.has(key)) return;
+    if (!keys) seen.set(module, keys = new Set());
+    keys.add(key);
     try {
-      unpatches.push(
-        instead(key, module, function (args, original) {
-          if (args.length > 1) args[1] = recolorProps(args[1]);
-          return original.apply(this, args);
-        })
-      );
-    } catch {}
+      unpatches.push(instead(key, module, function (args, original) {
+        stats.elements++;
+        const props = args[1];
+        const owner = componentName(args[0]);
+        // Observe direct native/component colour props, but never modify them
+        // without establishing what that component expects.
+        if (recording && props && typeof props === "object") {
+          for (const key of Object.keys(props)) {
+            if (/^(?:color|backgroundColor|tintColor|[A-Za-z]+Color)$/.test(key)) {
+              note("prop", owner + "." + key, props[key], props[key]);
+            }
+          }
+        }
+        if (props && typeof props === "object" && props.style != null) {
+          const style = recolorStyle(props.style, owner);
+          if (style !== props.style) args[1] = { ...props, style };
+        }
+        return original.apply(this, args);
+      }));
+      stats.hooks.push(key);
+    } catch { stats.failures.push(key); }
+  }
+
+  function report() {
+    return [
+      `Peaches ${VERSION} – lokale Farbdiagnose`,
+      `Hooks: ${stats.hooks.join(", ") || "keine"}`,
+      `Nicht verfügbar: ${stats.failures.join(", ") || "keine"}`,
+      `Farbaufrufe: ${stats.resolver}; erkannte Tokens: ${stats.named}`,
+      `Darstellungselemente: ${stats.elements}; Stiländerungen: ${stats.changed}`,
+      "Keine Chattexte oder Kontodaten erfasst. Kein Upload.",
+      "Messung: " + (recording ? "läuft" : "gestoppt"),
+      ...Array.from(observed, ([key, count]) => `${count}x ${key}`)
+    ].join("\n");
+  }
+
+  function Settings() {
+    const [output, setOutput] = React.useState(report);
+    const e = React.createElement;
+    const textStyle = { color: "#F4E9FF", fontSize: 15, marginBottom: 14 };
+    const buttonStyle = { backgroundColor: palette.panel, padding: 14, borderRadius: 10, marginBottom: 12 };
+    const button = (label, onPress) => e(RN.TouchableOpacity, { style: buttonStyle, onPress },
+      e(RN.Text, { style: { color: "#FFFFFF", fontSize: 16 } }, label));
+    return e(RN.ScrollView, { style: { backgroundColor: "#351923" }, contentContainerStyle: { padding: 18 } },
+      e(RN.Text, { style: textStyle }, "Peaches 15 · Reparatur und Diagnose"),
+      e(RN.Text, { style: textStyle }, "Falls noch etwas grau bleibt: Messung starten, zur betroffenen Ansicht wechseln, dann hierher zurückkommen und Bericht kopieren. Es werden nur Farbwerte gezählt."),
+      button("Messung starten (30 Sekunden)", () => {
+        clearTimeout(timer); observed.clear(); recording = true;
+        timer = setTimeout(() => { recording = false; }, 30000);
+        setOutput(report());
+      }),
+      button("Messung stoppen / Bericht anzeigen", () => {
+        clearTimeout(timer); recording = false; setOutput(report());
+      }),
+      button("Bericht kopieren", () => {
+        clearTimeout(timer); recording = false;
+        const output = report();
+        try { clipboard.setString(output); setOutput("Bericht kopiert.\n\n" + output); }
+        catch { setOutput("Kopieren nicht verfügbar. Text unten auswählen:\n\n" + output); }
+      }),
+      e(RN.Text, { selectable: true, style: { ...textStyle, fontSize: 12 } }, output)
+    );
+  }
+
+  function unload() {
+    clearTimeout(timer); recording = false;
+    for (const undo of unpatches.splice(0).reverse()) {
+      try { undo(); } catch { /* Continue removing other hooks. */ }
+    }
+    active = false;
+    observed.clear();
   }
 
   return {
     onLoad() {
-      if (!resolver?.resolveSemanticColor) {
-        throw new Error("Discords Farbauflösung wurde nicht gefunden.");
+      if (active) return;
+      if (typeof resolver?.resolveSemanticColor !== "function") {
+        throw new Error("Peaches 15: Farbauflösung nicht gefunden; keine Änderungen vorgenommen.");
       }
-
-      unpatches.push(
-        after("resolveSemanticColor", resolver, (args, result) =>
-          semanticOverride(args) ?? replaceKnownColor(result, "argb")
-        )
-      );
-
-      // Some newer Discord components feed colours directly into React
-      // Native instead of using semantic tokens. This catches those greys,
-      // including attachment cards and a few navigation/profile surfaces.
-      if (ReactNative?.processColor) {
-        unpatches.push(
-          instead("processColor", ReactNative, function (args, original) {
-            if (typeof args[0] === "string" || typeof args[0] === "number") {
-              args[0] = replaceKnownColor(
-                args[0],
-                typeof args[0] === "number" ? "rgba" : "argb"
-              );
-            }
-            return original.apply(this, args);
-          })
-        );
-      }
-
-      // Current Discord builds keep the DM names and bottom profile panel in
-      // already-created React Native styles. Recolour those exact default
-      // values as elements render, without touching the server rail or chat.
-      patchElementFactory(React, "createElement");
-      const jsxFound = vendetta.metro.findAllByProps?.("jsx", "jsxs");
-      const jsxModules = Array.isArray(jsxFound)
-        ? jsxFound
-        : jsxFound
-          ? [jsxFound]
-          : [];
-      for (const jsxModule of jsxModules) {
-        patchElementFactory(jsxModule, "jsx");
-        patchElementFactory(jsxModule, "jsxs");
-        patchElementFactory(jsxModule, "jsxDEV");
-      }
+      stats.hooks.length = 0; stats.failures.length = 0;
+      try {
+        unpatches.push(after("resolveSemanticColor", resolver, (args, original) => {
+          stats.resolver++;
+          const name = semanticName(args[1]);
+          if (name) stats.named++;
+          const result = semanticColour(name, original);
+          note("token", name, original, result);
+          return result;
+        }));
+        stats.hooks.push("resolveSemanticColor");
+        if (typeof RN.processColor === "function") {
+          try {
+            unpatches.push(instead("processColor", RN, function (args, original) {
+              const next = colour(args[0]);
+              note("processColor", "input", args[0], next);
+              args[0] = next;
+              return original.apply(this, args);
+            }));
+            stats.hooks.push("processColor");
+          } catch { stats.failures.push("processColor"); }
+        }
+        const seen = new WeakMap();
+        patchFactory(React, "createElement", seen);
+        // Confirmed API: core/vendetta/api.tsx. findAllByProps never existed.
+        if (typeof metro.findByPropsAll === "function") {
+          const found = metro.findByPropsAll("jsx", "jsxs");
+          if (!Array.isArray(found) || !found.length) stats.failures.push("jsx/jsxs: keine Module");
+          if (Array.isArray(found)) for (const mod of found) {
+            for (const key of ["jsx", "jsxs", "jsxDEV"]) patchFactory(mod, key, seen);
+          }
+        } else stats.failures.push("findByPropsAll");
+        active = true;
+      } catch (error) { unload(); throw error; }
     },
-
-    onUnload() {
-      unpatches.splice(0).forEach(unpatch => unpatch());
-    }
+    onUnload: unload,
+    settings: Settings
   };
 })()
