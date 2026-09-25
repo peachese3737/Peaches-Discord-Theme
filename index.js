@@ -13,6 +13,7 @@
       "TEXT_MUTED",
       "PANEL_BG",
       "BACKGROUND_SECONDARY_ALT",
+      "BACKGROUND_MOBILE_SECONDARY",
       "BACKGROUND_PRIMARY",
       "BACKGROUND_MOBILE_PRIMARY",
       "BG_BASE_PRIMARY",
@@ -46,10 +47,11 @@
   function semanticOverride(args) {
     const name = getSemanticName(args);
 
-    if (name === "CHANNELS_DEFAULT") return "#D69AB4";
-    if (name === "TEXT_MUTED") return "#B596C8";
+    if (name === "CHANNELS_DEFAULT") return "#E9A0BE";
+    if (name === "TEXT_MUTED") return "#C4A7D6";
+    if (name === "BACKGROUND_MOBILE_SECONDARY") return "#2C142C";
     if (name === "PANEL_BG" || name === "BACKGROUND_SECONDARY_ALT") {
-      return "#5A2947";
+      return "#2C142C";
     }
     if (
       name === "BACKGROUND_PRIMARY" ||
@@ -63,24 +65,25 @@
     return null;
   }
 
-  function recolorNeutral(value) {
+  function recolorNeutral(value, numericFormat = "argb") {
     if (typeof value === "number") {
       const unsigned = value >>> 0;
-      // React Native accepts numeric colours as 0xRRGGBBAA before
-      // processColor converts them to Android's internal representation.
-      const red = (unsigned >>> 24) & 255;
-      const green = (unsigned >>> 16) & 255;
-      const blue = (unsigned >>> 8) & 255;
-      const alpha = unsigned & 255;
+      const isArgb = numericFormat === "argb";
+      const alpha = isArgb ? (unsigned >>> 24) & 255 : unsigned & 255;
+      const red = isArgb ? (unsigned >>> 16) & 255 : (unsigned >>> 24) & 255;
+      const green = isArgb ? (unsigned >>> 8) & 255 : (unsigned >>> 16) & 255;
+      const blue = isArgb ? unsigned & 255 : (unsigned >>> 8) & 255;
       const source = `#${red.toString(16).padStart(2, "0")}${green
         .toString(16)
         .padStart(2, "0")}${blue.toString(16).padStart(2, "0")}`;
-      const replacement = recolorNeutral(source);
+      const replacement = recolorNeutral(source, numericFormat);
 
       if (replacement === source) return value;
 
       const rgb = Number.parseInt(replacement.slice(1, 7), 16);
-      return (((rgb << 8) | alpha) >>> 0);
+      return isArgb
+        ? (((alpha << 24) | rgb) >>> 0)
+        : (((rgb << 8) | alpha) >>> 0);
     }
 
     if (typeof value !== "string") return value;
@@ -101,11 +104,23 @@
     // gold, avatars and wallpapers stay untouched.
     if (maximum - minimum > 16) return value;
 
+    // The bottom profile panel in the current Discord build is a hard-coded
+    // Android grey (#252429) instead of a semantic theme token. Keep this
+    // narrow so the already-correct server rail and open-chat header do not
+    // get recoloured with it.
+    if (
+      Math.abs(red - 37) <= 5 &&
+      Math.abs(green - 36) <= 5 &&
+      Math.abs(blue - 41) <= 5
+    ) {
+      return "#5A2947" + alpha;
+    }
+
     let replacement;
     if (brightness <= 14) replacement = "#030204";       // True Onyx / server rail
     else if (brightness <= 24) replacement = "#050407";  // Almost black
     else if (brightness <= 36) replacement = "#1C0D2A";  // Deep violet / chat header
-    else if (brightness <= 50) replacement = "#5A2947";  // Old rose / profile panel
+    else if (brightness <= 50) return value;               // Preserve other dark UI chrome
     else if (brightness <= 68) replacement = "#5A2C50";  // Plum rose cards
     else if (brightness <= 95) replacement = "#7A436D";  // Dusky rose
     else if (brightness <= 130) replacement = "#A07CAD"; // Muted lilac
@@ -135,7 +150,10 @@
         unpatches.push(
           instead("processColor", ReactNative, function (args, original) {
             if (typeof args[0] === "string" || typeof args[0] === "number") {
-              args[0] = recolorNeutral(args[0]);
+              args[0] = recolorNeutral(
+                args[0],
+                typeof args[0] === "number" ? "rgba" : "argb"
+              );
             }
             return original.apply(this, args);
           })

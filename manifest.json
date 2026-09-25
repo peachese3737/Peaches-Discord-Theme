@@ -1,13 +1,13 @@
 {
   "name": "Peaches Onyx Fix",
-  "description": "Trennt Chatlisten-Hintergrund, Altrosa-Namen und pastell-lila Vorschautexte gezielt; passend zu Peaches Purple Magic v12.",
+  "description": "Dunkle Chatliste, Altrosa-Namen, pastell-lila Vorschautexte und eine gezielt gefärbte Profilleiste; passend zu Peaches Purple Magic v13.",
   "authors": [
     {
       "name": "Peaches"
     }
   ],
   "main": "index.js",
-  "hash": "fcbd71732eb952aafae17886afe3d766938bbf6b70bbf1a302b7ca1ab5e418ec",
+  "hash": "3097fe858df63f40c0581f0f1015c4db1759b82e7ec856b50f0ef9f6b007ecb1",
   "vendetta": {
     "icon": "ic_theme_24px"
   }
