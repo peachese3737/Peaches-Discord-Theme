@@ -1,13 +1,13 @@
 {
   "name": "Peaches Onyx Fix",
-  "description": "Trennt Chatlisten-Hintergrund, Altrosa-Namen und pastell-lila Vorschautexte gezielt; passend zu Peaches Purple Magic v12.",
+  "description": "Stabiler Mauve-/Onyx-Farbfix für Revenge Classic und aktuelle Discord-Android-Builds.",
   "authors": [
     {
       "name": "Peaches"
     }
   ],
   "main": "index.js",
-  "hash": "7df3f218f9c39788f513206d845baa7110a07bbb5ca921581a462f590284afd1",
+  "hash": "c62b1cb7bf74a06b503f0057d0e09d62d7e9d95bf9b27c84d99dc8e606e868a9",
   "vendetta": {
     "icon": "ic_theme_24px"
   }

@@ -1,154 +1,210 @@
 (() => {
-  const { after, instead } = vendetta.patcher;
+  const api = globalThis.vendetta;
+  if (!api?.patcher || !api?.metro) {
+    throw new Error("Peaches Onyx Fix benötigt Revenge Classic/Vendetta API.");
+  }
+
+  const { after, instead } = api.patcher;
+  const metro = api.metro;
   const unpatches = [];
-  const wanted = new Set([
-    "CHANNELS_DEFAULT", "TEXT_MUTED", "PANEL_BG", "BACKGROUND_SECONDARY_ALT",
-    "BACKGROUND_PRIMARY", "BACKGROUND_MOBILE_PRIMARY", "BG_BASE_PRIMARY", "BACKGROUND_BASE_LOW"
-  ]);
+  const timers = [];
+  const patched = new WeakMap();
+
+  const SEMANTIC_OVERRIDES = {
+    CHANNELS_DEFAULT: "#D69AB4",
+    TEXT_MUTED: "#B596C8",
+    PANEL_BG: "#5A2947",
+    BACKGROUND_SECONDARY_ALT: "#5A2947",
+    BACKGROUND_PRIMARY: "#32162F",
+    BACKGROUND_MOBILE_PRIMARY: "#32162F",
+    BG_BASE_PRIMARY: "#32162F",
+    BACKGROUND_BASE_LOW: "#32162F"
+  };
+
+  const SEMANTIC_NAMES = new Set(Object.keys(SEMANTIC_OVERRIDES));
+  const COLOR_KEYS = /(?:^|_)(?:color|tint|background|foreground)(?:$|_)|(?:color|tintcolor)$/i;
+
+  function remember(target, key) {
+    if (!target || typeof target[key] !== "function") return false;
+    let keys = patched.get(target);
+    if (!keys) patched.set(target, keys = new Set());
+    if (keys.has(key)) return false;
+    keys.add(key);
+    return true;
+  }
 
   function semanticName(args) {
     const keys = ["name", "key", "id", "token", "semanticColor", "color"];
-    for (const arg of args) {
-      if (typeof arg === "string" && wanted.has(arg.toUpperCase())) return arg.toUpperCase();
-      if (typeof arg === "symbol") {
-        const n = String(arg.description || "").toUpperCase();
-        if (wanted.has(n)) return n;
-      }
-      if (arg && typeof arg === "object") for (const k of keys) {
-        if (typeof arg[k] === "string" && wanted.has(arg[k].toUpperCase())) return arg[k].toUpperCase();
+    for (const arg of args || []) {
+      if (typeof arg === "string") {
+        const name = arg.toUpperCase();
+        if (SEMANTIC_NAMES.has(name)) return name;
+      } else if (typeof arg === "symbol") {
+        const name = String(arg.description || "").toUpperCase();
+        if (SEMANTIC_NAMES.has(name)) return name;
+      } else if (arg && typeof arg === "object") {
+        for (const key of keys) {
+          if (typeof arg[key] !== "string") continue;
+          const name = arg[key].toUpperCase();
+          if (SEMANTIC_NAMES.has(name)) return name;
+        }
       }
     }
     return "";
   }
 
-  function semanticOverride(args) {
-    const n = semanticName(args);
-    if (n === "CHANNELS_DEFAULT") return "#D69AB4";
-    if (n === "TEXT_MUTED") return "#B596C8";
-    if (n === "PANEL_BG" || n === "BACKGROUND_SECONDARY_ALT") return "#5A2947";
-    if (["BACKGROUND_PRIMARY", "BACKGROUND_MOBILE_PRIMARY", "BG_BASE_PRIMARY", "BACKGROUND_BASE_LOW"].includes(n)) return "#32162F";
-    return null;
-  }
-
-  function replacementForRGB(r, g, b) {
-    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  function replacementRGB(r, g, b) {
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
     if (max - min > 16) return null;
-    const v = (r + g + b) / 3;
-    if (v <= 14) return [3,2,4];
-    if (v <= 24) return [5,4,7];
-    if (v <= 36) return [28,13,42];
-    if (v <= 50) return [90,41,71];
-    if (v <= 68) return [90,44,80];
-    if (v <= 95) return [122,67,109];
-    if (v <= 130) return [160,124,173];
-    if (v <= 175) return [208,169,217];
-    if (v <= 215) return [214,154,180];
+    const value = (r + g + b) / 3;
+    if (value <= 14) return [3, 2, 4];
+    if (value <= 24) return [5, 4, 7];
+    if (value <= 36) return [28, 13, 42];
+    if (value <= 50) return [90, 41, 71];
+    if (value <= 68) return [90, 44, 80];
+    if (value <= 95) return [122, 67, 109];
+    if (value <= 130) return [160, 124, 173];
+    if (value <= 175) return [208, 169, 217];
+    if (value <= 215) return [214, 154, 180];
     return null;
   }
 
-  function hex2(n) { return n.toString(16).padStart(2, "0"); }
+  function hex2(value) {
+    return value.toString(16).padStart(2, "0");
+  }
 
-  function recolorString(value) {
+  function recolorHex(value) {
     if (typeof value !== "string") return value;
-    const m = value.match(/^#([0-9a-f]{6})([0-9a-f]{2})?$/i);
-    if (!m) return value;
-    const rgb = m[1];
-    const r = parseInt(rgb.slice(0,2),16), g = parseInt(rgb.slice(2,4),16), b = parseInt(rgb.slice(4,6),16);
-    const rep = replacementForRGB(r,g,b);
-    return rep ? `#${hex2(rep[0])}${hex2(rep[1])}${hex2(rep[2])}${m[2] || ""}` : value;
+    const match = value.match(/^#([0-9a-f]{6})([0-9a-f]{2})?$/i);
+    if (!match) return value;
+    const rgb = match[1];
+    const replacement = replacementRGB(
+      parseInt(rgb.slice(0, 2), 16),
+      parseInt(rgb.slice(2, 4), 16),
+      parseInt(rgb.slice(4, 6), 16)
+    );
+    if (!replacement) return value;
+    return `#${hex2(replacement[0])}${hex2(replacement[1])}${hex2(replacement[2])}${match[2] || ""}`;
   }
 
-  // RN input colour: 0xRRGGBBAA.
-  function recolorRNInputNumber(value) {
-    if (typeof value !== "number") return value;
-    const u = value >>> 0;
-    const r=(u>>>24)&255, g=(u>>>16)&255, b=(u>>>8)&255, a=u&255;
-    const rep = replacementForRGB(r,g,b);
-    if (!rep) return value;
-    return ((((rep[0]<<24) | (rep[1]<<16) | (rep[2]<<8) | a)) >>> 0);
+  // React Native returns Android colours as signed 0xAARRGGBB values.
+  function recolorProcessedColor(value) {
+    if (typeof value !== "number" || !Number.isFinite(value)) return value;
+    const unsigned = value >>> 0;
+    const alpha = (unsigned >>> 24) & 255;
+    const red = (unsigned >>> 16) & 255;
+    const green = (unsigned >>> 8) & 255;
+    const blue = unsigned & 255;
+    const replacement = replacementRGB(red, green, blue);
+    if (!replacement) return value;
+    return ((alpha << 24) | (replacement[0] << 16) | (replacement[1] << 8) | replacement[2]) | 0;
   }
 
-  // Android/native processed colour: 0xAARRGGBB.
-  function recolorNativeNumber(value) {
-    if (typeof value !== "number") return value;
-    const u = value >>> 0;
-    const a=(u>>>24)&255, r=(u>>>16)&255, g=(u>>>8)&255, b=u&255;
-    const rep = replacementForRGB(r,g,b);
-    if (!rep) return value;
-    return ((a<<24) | (rep[0]<<16) | (rep[1]<<8) | rep[2]) | 0;
-  }
-
-  function recolorInput(v) {
-    return typeof v === "string" ? recolorString(v) : recolorRNInputNumber(v);
-  }
-
-  const colorKey = /(?:^color$|color$|tintcolor$|shadowcolor$|overlaycolor$)/i;
-  function sanitizeNative(value, key, depth=0) {
-    if (depth > 6 || value == null) return value;
-    if (colorKey.test(String(key || ""))) {
-      if (typeof value === "number") return recolorNativeNumber(value);
-      if (typeof value === "string") return recolorString(value);
+  function sanitizeStyle(value, key, depth = 0, seen = new WeakSet()) {
+    if (depth > 7 || value == null) return value;
+    if (typeof value === "string") {
+      return COLOR_KEYS.test(String(key || "")) ? recolorHex(value) : value;
     }
+    if (typeof value !== "object") return value;
+    if (seen.has(value)) return value;
+    seen.add(value);
+
     if (Array.isArray(value)) {
-      let changed=false;
-      const out=value.map((x,i)=>{ const y=sanitizeNative(x,i,depth+1); if(y!==x) changed=true; return y; });
-      return changed ? out : value;
+      let changed = false;
+      const copy = value.map((entry, index) => {
+        const next = sanitizeStyle(entry, index, depth + 1, seen);
+        if (next !== entry) changed = true;
+        return next;
+      });
+      return changed ? copy : value;
     }
-    if (typeof value === "object") {
-      let out=value, changed=false;
-      for (const k of Object.keys(value)) {
-        const y=sanitizeNative(value[k],k,depth+1);
-        if (y!==value[k]) { if(!changed) out={...value}; out[k]=y; changed=true; }
-      }
-      return out;
+
+    let copy = value;
+    let changed = false;
+    for (const childKey of Object.keys(value)) {
+      const next = sanitizeStyle(value[childKey], childKey, depth + 1, seen);
+      if (next === value[childKey]) continue;
+      if (!changed) copy = { ...value };
+      copy[childKey] = next;
+      changed = true;
     }
-    return value;
+    return copy;
   }
 
-  function install() {
-    const tokens = vendetta.metro.findByProps("SemanticColor");
-    const resolver = tokens?.default?.meta ?? tokens?.default?.internal;
-    if (resolver?.resolveSemanticColor) {
-      unpatches.push(after("resolveSemanticColor", resolver, (args, result) => semanticOverride(args) ?? (typeof result === "string" ? recolorString(result) : result)));
+  function installSemanticPatch() {
+    const tokens = metro.findByProps("SemanticColor");
+    const resolver = tokens?.default?.meta ?? tokens?.default?.internal ?? tokens?.meta ?? tokens?.internal;
+    if (!resolver?.resolveSemanticColor || !remember(resolver, "resolveSemanticColor")) return false;
+    unpatches.push(after("resolveSemanticColor", resolver, (args, result) => {
+      try {
+        const name = semanticName(args);
+        return SEMANTIC_OVERRIDES[name] ?? recolorHex(result);
+      } catch {
+        return result;
+      }
+    }));
+    return true;
+  }
+
+  function installReactNativePatches() {
+    const ReactNative = metro.common?.ReactNative;
+    if (!ReactNative) return false;
+    let installed = false;
+
+    // Recolour the processed result, not the input. This avoids confusing
+    // 0xRRGGBBAA with Android's 0xAARRGGBB on newer Discord builds.
+    if (ReactNative.processColor && remember(ReactNative, "processColor")) {
+      unpatches.push(instead("processColor", ReactNative, function (args, original) {
+        const result = original.apply(this, args);
+        try { return recolorProcessedColor(result); } catch { return result; }
+      }));
+      installed = true;
     }
 
-    const RN = vendetta.metro.common.ReactNative;
-    if (RN?.processColor) {
-      unpatches.push(instead("processColor", RN, function(args, original) {
-        if (typeof args[0] === "string" || typeof args[0] === "number") args[0] = recolorInput(args[0]);
-        return original.apply(this,args);
+    if (ReactNative.StyleSheet?.create && remember(ReactNative.StyleSheet, "create")) {
+      unpatches.push(instead("create", ReactNative.StyleSheet, function (args, original) {
+        try {
+          if (args[0] && typeof args[0] === "object") {
+            args[0] = sanitizeStyle(args[0], "styles");
+          }
+        } catch {}
+        return original.apply(this, args);
       }));
+      installed = true;
     }
 
-    // Discord creates many styles lazily after startup. Patch StyleSheet.create so
-    // those late-created screens cannot fall back to neutral grey.
-    if (RN?.StyleSheet?.create) {
-      unpatches.push(instead("create", RN.StyleSheet, function(args, original) {
-        if (args[0] && typeof args[0] === "object") args[0] = sanitizeNative(args[0], "style");
-        return original.apply(this,args);
+    if (ReactNative.StyleSheet?.flatten && remember(ReactNative.StyleSheet, "flatten")) {
+      unpatches.push(after("flatten", ReactNative.StyleSheet, (_args, result) => {
+        try { return sanitizeStyle(result, "style"); } catch { return result; }
       }));
+      installed = true;
     }
 
-    // Final native-view funnel. This catches colours from components that captured
-    // old resolver/processColor references before this plugin loaded.
-    const payload = vendetta.metro.findByProps("create", "diff");
-    if (payload?.create) {
-      unpatches.push(instead("create", payload, function(args, original) {
-        if (args[0] && typeof args[0] === "object") args[0] = sanitizeNative(args[0], "props");
-        return original.apply(this,args);
-      }));
-    }
-    if (payload?.diff) {
-      unpatches.push(instead("diff", payload, function(args, original) {
-        if (args[0] && typeof args[0] === "object") args[0] = sanitizeNative(args[0], "props");
-        if (args[1] && typeof args[1] === "object") args[1] = sanitizeNative(args[1], "props");
-        return original.apply(this,args);
-      }));
+    return installed;
+  }
+
+  function installAvailablePatches() {
+    try { installSemanticPatch(); } catch {}
+    try { installReactNativePatches(); } catch {}
+  }
+
+  function stop() {
+    while (timers.length) clearTimeout(timers.pop());
+    while (unpatches.length) {
+      try { unpatches.pop()(); } catch {}
     }
   }
 
   return {
-    onLoad() { install(); },
-    onUnload() { unpatches.splice(0).reverse().forEach(fn => { try { fn(); } catch {} }); }
+    onLoad() {
+      installAvailablePatches();
+      // Discord loads some Metro modules lazily. Short guarded retries catch
+      // them without leaving a permanent interval running.
+      for (const delay of [500, 1500, 4000]) {
+        timers.push(setTimeout(installAvailablePatches, delay));
+      }
+    },
+    onUnload: stop
   };
 })()
