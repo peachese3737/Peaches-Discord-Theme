@@ -7,6 +7,25 @@
   const unpatches = [];
 
   function recolorNeutral(value) {
+    if (typeof value === "number") {
+      const unsigned = value >>> 0;
+      // React Native accepts numeric colours as 0xRRGGBBAA before
+      // processColor converts them to Android's internal representation.
+      const red = (unsigned >>> 24) & 255;
+      const green = (unsigned >>> 16) & 255;
+      const blue = (unsigned >>> 8) & 255;
+      const alpha = unsigned & 255;
+      const source = `#${red.toString(16).padStart(2, "0")}${green
+        .toString(16)
+        .padStart(2, "0")}${blue.toString(16).padStart(2, "0")}`;
+      const replacement = recolorNeutral(source);
+
+      if (replacement === source) return value;
+
+      const rgb = Number.parseInt(replacement.slice(1, 7), 16);
+      return (((rgb << 8) | alpha) >>> 0);
+    }
+
     if (typeof value !== "string") return value;
 
     const match = value.match(/^#([0-9a-f]{6})([0-9a-f]{2})?$/i);
@@ -29,12 +48,12 @@
     if (brightness <= 14) replacement = "#030204";       // True Onyx / server rail
     else if (brightness <= 24) replacement = "#050407";  // Almost black
     else if (brightness <= 36) replacement = "#1C0D2A";  // Deep violet / chat header
-    else if (brightness <= 50) replacement = "#3B1A2E";  // Dark old rose / composer
+    else if (brightness <= 50) replacement = "#5A2947";  // Old rose / profile panel
     else if (brightness <= 68) replacement = "#5A2C50";  // Plum rose cards
     else if (brightness <= 95) replacement = "#7A436D";  // Dusky rose
     else if (brightness <= 130) replacement = "#A07CAD"; // Muted lilac
     else if (brightness <= 175) replacement = "#D0A9D9"; // Lilac
-    else if (brightness <= 215) replacement = "#E7BDD1"; // Soft pink
+    else if (brightness <= 215) replacement = "#D69AB4"; // Muted old rose / names
     else return value;
 
     return replacement + alpha;
@@ -58,7 +77,7 @@
       if (ReactNative?.processColor) {
         unpatches.push(
           instead("processColor", ReactNative, function (args, original) {
-            if (typeof args[0] === "string") {
+            if (typeof args[0] === "string" || typeof args[0] === "number") {
               args[0] = recolorNeutral(args[0]);
             }
             return original.apply(this, args);

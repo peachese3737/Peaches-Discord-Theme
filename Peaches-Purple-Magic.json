@@ -1,6 +1,6 @@
 {
   "name": "Peaches Purple Magic",
-  "description": "Magisches Onyx-Theme mit wiederhergestellter Server- und Profilleiste sowie kontrastreicher Chatübersicht – Version 10",
+  "description": "Magisches Onyx-Theme mit dunkler Chatübersicht, Altrosa-Namen und pastell-lila Vorschautexten – Version 11",
   "authors": [
     {
       "name": "Peaches"
@@ -124,7 +124,7 @@
     "PRIMARY_600": "#4A245D",
     "PRIMARY_630": "#3A1B4C",
     "PRIMARY_645": "#51285D",
-    "PRIMARY_660": "#5A2947",
+    "PRIMARY_660": "#32162F",
     "PRIMARY_700": "#050407",
     "PRIMARY_730": "#643276",
     "PRIMARY_800": "#0B0710",
