@@ -1,6 +1,6 @@
 {
-  "name": "Peaches Onyx • Rose & Gold",
-  "description": "V8: schwarze Serverleiste, roséfarbene Eingabe, flieder-rosa Header, goldene Akzente; Hogwarts bleibt.",
+  "name": "Peaches Onyx Rose Gold V9",
+  "description": "V9 Kontrasttest: Onyx-Serverleiste, rosafarbene Chatliste, Altrosa-Eingabe, Gold/Flieder-Akzente; Hogwarts unverändert.",
   "authors": [
     {
       "name": "Peaches"
@@ -15,10 +15,10 @@
       "#0C0910"
     ],
     "HEADER_PRIMARY": [
-      "#FFD0E7"
+      "#FFD0E3"
     ],
     "HEADER_SECONDARY": [
-      "#E9C783"
+      "#F0CF92"
     ],
     "TEXT_PRIMARY": [
       "#F4E9FF"
@@ -27,10 +27,10 @@
       "#F1E8F7"
     ],
     "TEXT_MUTED": [
-      "#C6ADD2"
+      "#D6B9D0"
     ],
     "TEXT_LINK": [
-      "#F2B7D8"
+      "#F6AFD0"
     ],
     "INTERACTIVE_NORMAL": [
       "#F1C3E3"
@@ -45,61 +45,61 @@
       "#765F82"
     ],
     "BACKGROUND_PRIMARY": [
-      "#120C17"
+      "#211225"
     ],
     "BACKGROUND_SECONDARY": [
-      "#0A080C"
+      "#321D35"
     ],
     "BACKGROUND_SECONDARY_ALT": [
-      "#050506"
+      "#100B12"
     ],
     "BACKGROUND_TERTIARY": [
-      "#030304"
+      "#050507"
     ],
     "BACKGROUND_ACCENT": [
-      "#C17BA8"
+      "#C780A8"
     ],
     "BACKGROUND_FLOATING": [
-      "#110C15"
+      "#28192C"
     ],
     "BACKGROUND_MOBILE_PRIMARY": [
-      "#120C17"
+      "#211225"
     ],
     "BACKGROUND_MOBILE_SECONDARY": [
-      "#0A080C"
+      "#321D35"
     ],
     "BACKGROUND_NESTED_FLOATING": [
-      "#120D17"
+      "#28192C"
     ],
     "BG_BASE_PRIMARY": [
-      "#120C17"
+      "#211225"
     ],
     "BG_BASE_SECONDARY": [
-      "#0A080C"
+      "#321D35"
     ],
     "BG_BASE_TERTIARY": [
-      "#030304"
+      "#050507"
     ],
     "BG_SURFACE_RAISED": [
-      "#38233B"
+      "#50304A"
     ],
     "BG_SURFACE_OVERLAY": [
-      "#16101C"
+      "#37213A"
     ],
     "PANEL_BG": [
-      "#050506"
+      "#050507"
     ],
     "BG_BACKDROP": [
       "#09030EB8"
     ],
     "CARD_PRIMARY_BG": [
-      "#352437"
+      "#493047"
     ],
     "CARD_PRIMARY_PRESSED_BG": [
       "#52314D"
     ],
     "CARD_SECONDARY_BG": [
-      "#241827"
+      "#39243A"
     ],
     "BACKGROUND_MESSAGE_HOVER": [
       "#332039"
@@ -111,7 +111,7 @@
       "#553052"
     ],
     "BACKGROUND_MODIFIER_SELECTED": [
-      "#663A62"
+      "#805076"
     ],
     "BACKGROUND_MODIFIER_ACCENT": [
       "#AA7198"
@@ -132,22 +132,22 @@
       "#E4B97344"
     ],
     "CHANNELTEXTAREA_BACKGROUND": [
-      "#39213B"
+      "#60354F"
     ],
     "INPUT_BACKGROUND": [
-      "#29192C"
+      "#47283D"
     ],
     "INPUT_FOCUSED_BORDER": [
       "#F5A5CE"
     ],
     "REDESIGN_CHAT_INPUT_BACKGROUND": [
-      "#39213B"
+      "#60354F"
     ],
     "REDESIGN_ACTIVITY_CARD_BACKGROUND": [
-      "#39273C"
+      "#51354D"
     ],
     "REDESIGN_BUTTON_PRIMARY_BACKGROUND": [
-      "#E88EBB"
+      "#EA9BC7"
     ],
     "REDESIGN_BUTTON_PRIMARY_ALT_BACKGROUND": [
       "#D7B875"
@@ -159,7 +159,7 @@
       "#180F1B"
     ],
     "REDESIGN_BUTTON_SECONDARY_BACKGROUND": [
-      "#8F567F"
+      "#9E709B"
     ],
     "REDESIGN_BUTTON_SECONDARY_PRESSED_BACKGROUND": [
       "#A16CC0"
@@ -186,7 +186,7 @@
       "#F4A8CF"
     ],
     "EMBED_BACKGROUND": [
-      "#241C28"
+      "#51334B"
     ],
     "FORUM_POST_TAG_BACKGROUND": [
       "#36213F"
@@ -204,7 +204,7 @@
       "#17100A"
     ],
     "BG_BRAND": [
-      "#E58EBB"
+      "#E89FC6"
     ],
     "BORDER_FAINT": [
       "#8B567F"
@@ -234,7 +234,7 @@
       "#D7B6DF"
     ],
     "CHANNEL_ICON": [
-      "#E7C58A"
+      "#F0CF92"
     ],
     "CHANNEL_TEXT_AREA_PLACEHOLDER": [
       "#E6B8DA"
@@ -290,14 +290,14 @@
     "PRIMARY_400": "#B888C7",
     "PRIMARY_460": "#91699F",
     "PRIMARY_500": "#724B7C",
-    "PRIMARY_530": "#3B2941",
-    "PRIMARY_600": "#211725",
-    "PRIMARY_630": "#120C17",
-    "PRIMARY_645": "#24182A",
-    "PRIMARY_660": "#0A080C",
-    "PRIMARY_700": "#030304",
+    "PRIMARY_530": "#50304A",
+    "PRIMARY_600": "#39243A",
+    "PRIMARY_630": "#211225",
+    "PRIMARY_645": "#493047",
+    "PRIMARY_660": "#100B12",
+    "PRIMARY_700": "#050507",
     "PRIMARY_730": "#633B68",
-    "PRIMARY_800": "#050506",
+    "PRIMARY_800": "#050507",
     "PLUM_0": "#E6B7EF",
     "PLUM_3": "#F4E9FF",
     "PLUM_4": "#C997DA",
@@ -308,21 +308,21 @@
     "PLUM_13": "#ECA3CB",
     "PLUM_14": "#8B4F91",
     "PLUM_15": "#C6ADD2",
-    "PLUM_16": "#16101C",
-    "PLUM_17": "#120C17",
-    "PLUM_18": "#0A080C",
-    "PLUM_19": "#39213B",
-    "PLUM_20": "#030304",
+    "PLUM_16": "#37213A",
+    "PLUM_17": "#211225",
+    "PLUM_18": "#321D35",
+    "PLUM_19": "#60354F",
+    "PLUM_20": "#050507",
     "PLUM_22": "#633B68",
-    "PLUM_24": "#050506",
+    "PLUM_24": "#050507",
     "BRAND_260": "#E7CBEA",
     "BRAND_300": "#F7C6E0",
     "BRAND_330": "#EFC0E9",
     "BRAND_345": "#D39BE0",
     "BRAND_360": "#F5A9D2",
-    "BRAND_400": "#EE99C5",
+    "BRAND_400": "#ECA2C7",
     "BRAND_430": "#EB95C3",
-    "BRAND_460": "#E88EBB",
+    "BRAND_460": "#EA9BC7",
     "BRAND_500": "#D57DAE",
     "BRAND_530": "#C16DA1",
     "BRAND_560": "#AC619C",
