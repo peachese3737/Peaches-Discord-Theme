@@ -28,7 +28,7 @@
     let replacement;
     if (brightness <= 14) replacement = "#030204";       // True Onyx / server rail
     else if (brightness <= 24) replacement = "#050407";  // Almost black
-    else if (brightness <= 36) replacement = "#08050B";  // Black violet
+    else if (brightness <= 36) replacement = "#1C0D2A";  // Deep violet / chat header
     else if (brightness <= 50) replacement = "#3B1A2E";  // Dark old rose / composer
     else if (brightness <= 68) replacement = "#5A2C50";  // Plum rose cards
     else if (brightness <= 95) replacement = "#7A436D";  // Dusky rose
