@@ -1,13 +1,13 @@
 {
-  "name": "Peaches Onyx Fix 1.9",
-  "description": "Färbt die festen nativen Discord-Grautöne der Namen rosa und der Profilleiste altrosa; passend zu Peaches Purple Magic v14.",
+  "name": "Peaches Onyx Fix – Stabil",
+  "description": "Stabiler Stand für Peaches Purple Magic v14 ohne nativen Global-Hook; erhält Chatfarben, Hintergrund und Schreibfeld.",
   "authors": [
     {
       "name": "Peaches"
     }
   ],
   "main": "index.js",
-  "hash": "fa4fa3e8d60396a878e061223b8432f71ee70b6573396b380b962c009dc26e74",
+  "hash": "ad84c9ae744a58791ed34d64dba9d8e612ce363aa27523d616a5563d4035c895",
   "vendetta": {
     "icon": "ic_theme_24px"
   }

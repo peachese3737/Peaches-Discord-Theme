@@ -163,37 +163,6 @@
     } catch {}
   }
 
-  function patchNativePayloads() {
-    const found = vendetta.metro.findAllByProps?.("create", "diff");
-    const candidates = Array.isArray(found) ? found : found ? [found] : [];
-
-    for (const candidate of candidates) {
-      if (
-        !candidate ||
-        typeof candidate.create !== "function" ||
-        typeof candidate.diff !== "function" ||
-        candidate.create.length < 2 ||
-        candidate.diff.length < 3
-      ) continue;
-
-      try {
-        unpatches.push(
-          instead("create", candidate, function (args, original) {
-            if (args.length > 0) args[0] = recolorProps(args[0]);
-            return original.apply(this, args);
-          })
-        );
-        unpatches.push(
-          instead("diff", candidate, function (args, original) {
-            if (args.length > 0) args[0] = recolorProps(args[0]);
-            if (args.length > 1) args[1] = recolorProps(args[1]);
-            return original.apply(this, args);
-          })
-        );
-      } catch {}
-    }
-  }
-
   return {
     onLoad() {
       if (!resolver?.resolveSemanticColor) {
@@ -238,7 +207,6 @@
         patchElementFactory(jsxModule, "jsxs");
         patchElementFactory(jsxModule, "jsxDEV");
       }
-      patchNativePayloads();
     },
 
     onUnload() {
