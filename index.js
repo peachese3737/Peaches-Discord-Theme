@@ -3,10 +3,8 @@
   const tokens = vendetta.metro.findByProps("SemanticColor");
   const resolver = tokens?.default?.meta ?? tokens?.default?.internal;
   const ReactNative = vendetta.metro.common.ReactNative;
-  const React = vendetta.metro.common.React;
 
   const unpatches = [];
-  const styleCache = new WeakMap();
 
   function getSemanticName(args) {
     const candidates = ["name", "key", "id", "token", "semanticColor", "color"];
@@ -15,7 +13,6 @@
       "TEXT_MUTED",
       "PANEL_BG",
       "BACKGROUND_SECONDARY_ALT",
-      "BACKGROUND_MOBILE_SECONDARY",
       "BACKGROUND_PRIMARY",
       "BACKGROUND_MOBILE_PRIMARY",
       "BG_BASE_PRIMARY",
@@ -49,11 +46,10 @@
   function semanticOverride(args) {
     const name = getSemanticName(args);
 
-    if (name === "CHANNELS_DEFAULT") return "#E9A0BE";
-    if (name === "TEXT_MUTED") return "#C4A7D6";
-    if (name === "BACKGROUND_MOBILE_SECONDARY") return "#351923";
+    if (name === "CHANNELS_DEFAULT") return "#D69AB4";
+    if (name === "TEXT_MUTED") return "#B596C8";
     if (name === "PANEL_BG" || name === "BACKGROUND_SECONDARY_ALT") {
-      return "#351923";
+      return "#5A2947";
     }
     if (
       name === "BACKGROUND_PRIMARY" ||
@@ -67,25 +63,24 @@
     return null;
   }
 
-  function replaceKnownColor(value, numericFormat = "argb") {
+  function recolorNeutral(value) {
     if (typeof value === "number") {
       const unsigned = value >>> 0;
-      const isArgb = numericFormat === "argb";
-      const alpha = isArgb ? (unsigned >>> 24) & 255 : unsigned & 255;
-      const red = isArgb ? (unsigned >>> 16) & 255 : (unsigned >>> 24) & 255;
-      const green = isArgb ? (unsigned >>> 8) & 255 : (unsigned >>> 16) & 255;
-      const blue = isArgb ? unsigned & 255 : (unsigned >>> 8) & 255;
+      // React Native accepts numeric colours as 0xRRGGBBAA before
+      // processColor converts them to Android's internal representation.
+      const red = (unsigned >>> 24) & 255;
+      const green = (unsigned >>> 16) & 255;
+      const blue = (unsigned >>> 8) & 255;
+      const alpha = unsigned & 255;
       const source = `#${red.toString(16).padStart(2, "0")}${green
         .toString(16)
         .padStart(2, "0")}${blue.toString(16).padStart(2, "0")}`;
-      const replacement = replaceKnownColor(source, numericFormat);
+      const replacement = recolorNeutral(source);
 
       if (replacement === source) return value;
 
       const rgb = Number.parseInt(replacement.slice(1, 7), 16);
-      return isArgb
-        ? (((alpha << 24) | rgb) >>> 0)
-        : (((rgb << 8) | alpha) >>> 0);
+      return (((rgb << 8) | alpha) >>> 0);
     }
 
     if (typeof value !== "string") return value;
@@ -98,69 +93,27 @@
     const red = Number.parseInt(rgb.slice(0, 2), 16);
     const green = Number.parseInt(rgb.slice(2, 4), 16);
     const blue = Number.parseInt(rgb.slice(4, 6), 16);
-    const source = `#${rgb.toLowerCase()}`;
-    const replacements = {
-      "#252429": "#5A2947", // bottom profile panel -> lighter old rose
-      "#b5bac1": "#F0A0C8", // regular DM names -> pink
-      "#dbdee1": "#F0A0C8", // brighter DM-name variant -> pink
-      "#949ba4": "#C4A7D6", // preview/activity text -> pastel lilac
-      "#80848e": "#A982AD"  // strongly muted preview text -> muted lilac
-    };
-    const replacement = replacements[source];
-    return replacement ? replacement + alpha : value;
-  }
+    const maximum = Math.max(red, green, blue);
+    const minimum = Math.min(red, green, blue);
+    const brightness = (red + green + blue) / 3;
 
-  function recolorStyle(style) {
-    if (style == null) return style;
+    // Only replace genuinely neutral Discord greys. Existing purple, pink,
+    // gold, avatars and wallpapers stay untouched.
+    if (maximum - minimum > 16) return value;
 
-    if (typeof style === "object" && !Array.isArray(style)) {
-      const cached = styleCache.get(style);
-      if (cached) return cached;
-    }
+    let replacement;
+    if (brightness <= 14) replacement = "#030204";       // True Onyx / server rail
+    else if (brightness <= 24) replacement = "#050407";  // Almost black
+    else if (brightness <= 36) replacement = "#1C0D2A";  // Deep violet / chat header
+    else if (brightness <= 50) replacement = "#5A2947";  // Old rose / profile panel
+    else if (brightness <= 68) replacement = "#5A2C50";  // Plum rose cards
+    else if (brightness <= 95) replacement = "#7A436D";  // Dusky rose
+    else if (brightness <= 130) replacement = "#A07CAD"; // Muted lilac
+    else if (brightness <= 175) replacement = "#D0A9D9"; // Lilac
+    else if (brightness <= 215) replacement = "#D69AB4"; // Muted old rose / names
+    else return value;
 
-    let flat;
-    try {
-      flat = ReactNative?.StyleSheet?.flatten?.(style) ?? style;
-    } catch {
-      return style;
-    }
-    if (!flat || typeof flat !== "object") return style;
-
-    let changed = false;
-    const next = { ...flat };
-    for (const key of ["color", "backgroundColor"]) {
-      const value = next[key];
-      if (typeof value !== "string" && typeof value !== "number") continue;
-      const replacement = replaceKnownColor(value, "argb");
-      if (replacement !== value) {
-        next[key] = replacement;
-        changed = true;
-      }
-    }
-
-    const result = changed ? next : style;
-    if (typeof style === "object" && !Array.isArray(style)) {
-      styleCache.set(style, result);
-    }
-    return result;
-  }
-
-  function recolorProps(props) {
-    if (!props || typeof props !== "object" || props.style == null) return props;
-    const style = recolorStyle(props.style);
-    return style === props.style ? props : { ...props, style };
-  }
-
-  function patchElementFactory(module, key) {
-    if (!module || typeof module[key] !== "function") return;
-    try {
-      unpatches.push(
-        instead(key, module, function (args, original) {
-          if (args.length > 1) args[1] = recolorProps(args[1]);
-          return original.apply(this, args);
-        })
-      );
-    } catch {}
+    return replacement + alpha;
   }
 
   return {
@@ -171,7 +124,7 @@
 
       unpatches.push(
         after("resolveSemanticColor", resolver, (args, result) =>
-          semanticOverride(args) ?? replaceKnownColor(result, "argb")
+          semanticOverride(args) ?? recolorNeutral(result)
         )
       );
 
@@ -182,30 +135,11 @@
         unpatches.push(
           instead("processColor", ReactNative, function (args, original) {
             if (typeof args[0] === "string" || typeof args[0] === "number") {
-              args[0] = replaceKnownColor(
-                args[0],
-                typeof args[0] === "number" ? "rgba" : "argb"
-              );
+              args[0] = recolorNeutral(args[0]);
             }
             return original.apply(this, args);
           })
         );
-      }
-
-      // Current Discord builds keep the DM names and bottom profile panel in
-      // already-created React Native styles. Recolour those exact default
-      // values as elements render, without touching the server rail or chat.
-      patchElementFactory(React, "createElement");
-      const jsxFound = vendetta.metro.findAllByProps?.("jsx", "jsxs");
-      const jsxModules = Array.isArray(jsxFound)
-        ? jsxFound
-        : jsxFound
-          ? [jsxFound]
-          : [];
-      for (const jsxModule of jsxModules) {
-        patchElementFactory(jsxModule, "jsx");
-        patchElementFactory(jsxModule, "jsxs");
-        patchElementFactory(jsxModule, "jsxDEV");
       }
     },
 

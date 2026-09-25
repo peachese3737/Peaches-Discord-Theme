@@ -1,13 +1,13 @@
 {
-  "name": "Peaches Onyx Fix – Stabil",
-  "description": "Stabiler Stand für Peaches Purple Magic v14 ohne nativen Global-Hook; erhält Chatfarben, Hintergrund und Schreibfeld.",
+  "name": "Peaches Onyx Fix",
+  "description": "Trennt Chatlisten-Hintergrund, Altrosa-Namen und pastell-lila Vorschautexte gezielt; passend zu Peaches Purple Magic v12.",
   "authors": [
     {
       "name": "Peaches"
     }
   ],
   "main": "index.js",
-  "hash": "ad84c9ae744a58791ed34d64dba9d8e612ce363aa27523d616a5563d4035c895",
+  "hash": "fcbd71732eb952aafae17886afe3d766938bbf6b70bbf1a302b7ca1ab5e418ec",
   "vendetta": {
     "icon": "ic_theme_24px"
   }
