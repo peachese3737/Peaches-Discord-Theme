@@ -1,13 +1,13 @@
 {
   "name": "Peaches Onyx Fix",
-  "description": "Ersetzt Discord-Grautöne durch echtes Onyx, dunkles Altrosa, Flieder und sanftes Pink; passend zu Peaches Purple Magic v7.",
+  "description": "Ersetzt Discord-Grautöne durch echtes Onyx, Altrosa, Flieder und Pink; passend zu Peaches Purple Magic v8.",
   "authors": [
     {
       "name": "Peaches"
     }
   ],
   "main": "index.js",
-  "hash": "0571ff7f74a6e231f5c3c7fdc41f711fb4836f083b40c685356b5a2fc531ad4a",
+  "hash": "fc896a50209683710c62430ed0412434fd53a68bbf7a6f25a2a48b9edb52cea8",
   "vendetta": {
     "icon": "ic_theme_24px"
   }
