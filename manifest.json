@@ -1,13 +1,13 @@
 {
-  "name": "Peaches Onyx Fix",
-  "description": "Stabiler Mauve-/Onyx-Farbfix mit sichtbarem Theme-Hintergrund für Revenge Classic.",
+  "name": "Peaches Onyx Fix – Stabil",
+  "description": "Stabiler Stand für Peaches Purple Magic v14 ohne nativen Global-Hook; erhält Chatfarben, Hintergrund und Schreibfeld.",
   "authors": [
     {
       "name": "Peaches"
     }
   ],
   "main": "index.js",
-  "hash": "a13f4b96730d23ef0f8c48071944d69a4e48db8091901bb82d8eff90a2b66075",
+  "hash": "ad84c9ae744a58791ed34d64dba9d8e612ce363aa27523d616a5563d4035c895",
   "vendetta": {
     "icon": "ic_theme_24px"
   }
