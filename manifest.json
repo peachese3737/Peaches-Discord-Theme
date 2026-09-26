@@ -1,13 +1,13 @@
 {
   "name": "Peaches Onyx Fix",
-  "description": "Version 15.3: Namensregel über gemessenen Farbtoken und Textvariante; weiße Uhrzeit und Statussymbole. Profilleistenregel aus 15.2 und bestätigte Chatfarben erhalten.",
+  "description": "Version 15.4: bestätigte rosa Karten erhalten, Listen-Schriftstile ergänzt, Android-Leiste schwarz mit weißer Schrift ohne zusätzlichen Stackeintrag. Ursprüngliche Stilstruktur erhalten.",
   "authors": [
     {
       "name": "Peaches"
     }
   ],
   "main": "index.js",
-  "hash": "bb1254c16ff1241525f6a6f7837167b766e0bc97050d8eae4620b73747cf4c9d",
+  "hash": "72b073be536b21479e6db6aa87ba734a2b340b52e93df14f680227d538aa953b",
   "vendetta": {
     "icon": "ic_theme_24px"
   }

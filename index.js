@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   // Peaches 15: API repairs + restoration. No native payload hooks.
-  const VERSION = "15.3";
+  const VERSION = "15.4";
   const { after, instead } = vendetta.patcher;
   const metro = vendetta.metro;
   const tokens = metro.findByProps("SemanticColor");
@@ -193,31 +193,33 @@
       if (profile) stats.panels++;
       note("style", owner + "." + key, value, result);
       if (result !== value) {
-        next ??= { ...flat };
+        next ??= {};
         next[key] = result;
         stats.changed++;
       }
     }
-    return next || style;
+    // Keep registered and animated style entries intact. Flatten only to READ
+    // the effective colour; do not replace the caller's entire style structure.
+    return next ? [style, next] : style;
   }
 
   function recolorNameProps(props, owner) {
-    // 15.2 on device: no sibling-tree matches. The 15.1 recording DOES
-    // show this exact pair on the text component itself. No parent metadata,
-    // child-tree scan or global MOBILE_TEXT_HEADING_PRIMARY override needed.
+    // 15.3's token+variant hits were upper cards. User approved those at 11:10.
+    // 15.1 recorded 13 list-like text-md/medium styles with #abacb2 and
+    // 12 with #C4A7D6, while previews were text-sm/normal. Target the resolved
+    // style at that layer as well; retain the approved card rule.
     if (!props || props.variant !== "text-md/medium" ||
-        owner === "ChannelRowPreview" || owner === "ActivityStatusText" ||
-        colourLabel(props.color) !== "token:MOBILE_TEXT_HEADING_PRIMARY") return props;
+        owner === "ChannelRowPreview" || owner === "ActivityStatusText") return props;
     try {
       const style = RN.StyleSheet.flatten(props.style);
-      if (typeof style?.color === "string" && style.color.toUpperCase() === palette.name) return props;
-      // Preserve explicit unknown/custom text colours. The observed neutral,
-      // lilac and white title styles are the only concrete values accepted.
-      if (style?.color != null && !(typeof style.color === "string" &&
-          /^(#abacb2|#c4a7d6|#fbfbfb)$/i.test(style.color))) return props;
+      const heading = colourLabel(props.color) === "token:MOBILE_TEXT_HEADING_PRIMARY";
+      const measuredStyle = typeof style?.color === "string" && /^(#abacb2|#c4a7d6|#fbfbfb)$/i.test(style.color);
+      if (!measuredStyle && !(style?.color == null && heading)) return props;
+      // Explicit preview/body tokens win over the style heuristic.
+      if (["token:TEXT_MUTED", "token:TEXT_DEFAULT", "token:TEXT_SUBTLE"].includes(colourLabel(props.color))) return props;
       const result = { ...props, style: [props.style, { color: palette.name }] };
       stats.rowNames++; stats.changed++;
-      note("gezielt", "Text-md.HeadingPrimary", style?.color ?? props.color, palette.name);
+      note("gezielt", "Text-md.Stil", style?.color ?? props.color, palette.name);
       return result;
     } catch { return props; }
   }
@@ -225,43 +227,45 @@
   function lightStatusProps(type, props, owner) {
     if (!props || typeof props !== "object") return props;
     // RN StatusBar and native-stack use DIFFERENT documented enum values.
-    // Only change icon/text brightness, never bar background, size or layout.
-    if ((type === RN.StatusBar || owner === "StatusBar") && props.barStyle !== "light-content") {
+    // Black background + white content requested. Preserve every inset,
+    // translucent, hidden and navigation-bar option from the original props.
+    if ((type === RN.StatusBar || owner === "StatusBar") &&
+        (props.barStyle !== "light-content" || props.backgroundColor !== "#000000")) {
       stats.statusBars++;
-      return { ...props, barStyle: "light-content" };
+      return { ...props, barStyle: "light-content", backgroundColor: "#000000" };
     }
     const nativeScreen = owner === "ReanimatedNativeStackScreen";
     if ((nativeScreen || Object.prototype.hasOwnProperty.call(props, "statusBarStyle")) &&
-        (props.statusBarStyle == null || ["auto", "inverted", "dark"].includes(props.statusBarStyle))) {
+        (props.statusBarStyle == null || ["auto", "inverted", "dark", "light"].includes(props.statusBarStyle)) &&
+        (props.statusBarStyle !== "light" || props.statusBarColor !== "#000000")) {
       stats.statusBars++;
-      return { ...props, statusBarStyle: "light" };
+      return { ...props, statusBarStyle: "light", statusBarColor: "#000000" };
     }
     return props;
   }
 
   function installStatusBar() {
     const bar = RN.StatusBar;
-    if (typeof bar?.pushStackEntry !== "function" || typeof bar?.popStackEntry !== "function") {
+    if (typeof bar?.setBarStyle !== "function") {
       stats.failures.push("StatusBar-Startwert"); return;
     }
     try {
-      // Apply immediately, even if the screen was mounted before this plugin.
-      const entry = bar.pushStackEntry({ barStyle: "light-content" });
-      const originalSet = bar.setBarStyle;
-      let lastRequest;
-      unpatches.push(() => {
-        bar.popStackEntry(entry);
-        if (lastRequest && typeof originalSet === "function") originalSet.apply(bar, lastRequest);
-      });
-      stats.hooks.push("StatusBar-Startwert");
-      if (typeof originalSet === "function") {
-        unpatches.push(instead("setBarStyle", bar, function (args, original) {
-          lastRequest = args.slice();
-          args[0] = "light-content";
+      // No pushStackEntry: it triggers a full stack/default-prop merge, which
+      // can reset native-stack-controlled translucency and create an inset.
+      // These setters change only their own field. Android 15+ may ignore
+      // setBackgroundColor under edge-to-edge; never compensate with padding.
+      for (const [method, value] of [["setBarStyle", "light-content"], ["setBackgroundColor", "#000000"]]) {
+        const setter = bar[method];
+        if (typeof setter !== "function") continue;
+        let lastRequest;
+        unpatches.push(() => { if (lastRequest) setter.apply(bar, lastRequest); });
+        setter.call(bar, value, false);
+        unpatches.push(instead(method, bar, function (args, original) {
+          lastRequest = args.slice(); args[0] = value;
           stats.statusBars++;
           return original.apply(this, args);
         }));
-        stats.hooks.push("StatusBar.setBarStyle");
+        stats.hooks.push("StatusBar." + method);
       }
     } catch { stats.failures.push("StatusBar"); }
   }
@@ -323,7 +327,7 @@
     const button = (label, onPress) => e(RN.TouchableOpacity, { style: buttonStyle, onPress },
       e(RN.Text, { style: { color: "#FFFFFF", fontSize: 16 } }, label));
     return e(RN.ScrollView, { style: { backgroundColor: "#351923" }, contentContainerStyle: { padding: 18 } },
-      e(RN.Text, { style: textStyle }, "Peaches 15.3 · Rosa Übersichtsnamen und weiße Statussymbole"),
+      e(RN.Text, { style: textStyle }, "Peaches 15.4 · Listen-Schriftstile und schwarze Android-Leiste"),
       e(RN.Text, { style: textStyle }, "Falls noch etwas grau bleibt: Messung starten, zur betroffenen Ansicht wechseln, dann hierher zurückkommen und Bericht kopieren. Es werden nur Farbwerte gezählt."),
       button("Messung starten (30 Sekunden)", () => {
         startRecording();
