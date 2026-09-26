@@ -1,14 +1,14 @@
 (() => {
   "use strict";
   // Peaches 15: API repairs + restoration. No native payload hooks.
-  const VERSION = "15.1";
+  const VERSION = "15.2";
   const { after, instead } = vendetta.patcher;
   const metro = vendetta.metro;
   const tokens = metro.findByProps("SemanticColor");
   const resolver = tokens?.default?.meta ?? tokens?.default?.internal;
   const { React, ReactNative: RN, clipboard } = metro.common;
   const unpatches = [];
-  const stats = { resolver: 0, named: 0, elements: 0, changed: 0, hooks: [], failures: [] };
+  const stats = { resolver: 0, named: 0, elements: 0, changed: 0, rowNames: 0, panels: 0, hooks: [], failures: [] };
   const observed = new Map();
   let recording = false;
   let timer;
@@ -184,7 +184,13 @@
       const value = flat[key];
       // Semantic/dynamic native colour objects are resolved by their owner.
       if (typeof value !== "string" && typeof value !== "number") continue;
-      const result = colour(value);
+      // 15.1 device recording: the bottom pill is a View, height 60,
+      // radius 30, #242429. Match all three; never remap this grey globally.
+      const profile = key === "backgroundColor" && owner === "View" &&
+        flat.height === 60 && flat.borderRadius === 30 &&
+        typeof value === "string" && /^(#242429|#3b1a2e)$/i.test(value);
+      const result = profile ? palette.panel : colour(value);
+      if (profile) stats.panels++;
       note("style", owner + "." + key, value, result);
       if (result !== value) {
         next ??= { ...flat };
@@ -193,6 +199,53 @@
       }
     }
     return next || style;
+  }
+
+  function recolorRowName(element) {
+    if (typeof React.isValidElement !== "function" || typeof React.cloneElement !== "function") return element;
+    // Inspect element structure only, never message strings, IDs or callbacks.
+    // A preview is the row anchor; its subtree (including activity) is opaque.
+    // Reject ambiguous, large or deep trees rather than guessing at a label.
+    let budget = 64, overflow = false, previews = 0;
+    const candidates = [];
+    function inspect(node, depth, path) {
+      if (--budget < 0 || depth > 6) { overflow = true; return; }
+      if (Array.isArray(node)) {
+        for (let i = 0; i < node.length && !overflow; i++) inspect(node[i], depth + 1, path.concat(i));
+        return;
+      }
+      if (!React.isValidElement(node)) return;
+      const name = componentName(node.type);
+      if (name === "ChannelRowPreview") { previews++; return; }
+      if (name === "ActivityStatusText") return;
+      if (node.props?.variant === "text-md/medium") {
+        candidates.push({ node, path }); return;
+      }
+      if (node.props?.children != null) inspect(node.props.children, depth + 1, path.concat("children"));
+    }
+    try {
+      inspect(element, 0, []);
+      if (overflow || previews !== 1 || candidates.length !== 1) return element;
+      const { node, path } = candidates[0];
+      const style = RN.StyleSheet.flatten(node.props.style);
+      if (style?.color === palette.name) return element;
+      const knownStyle = typeof style?.color === "string" && /^(#abacb2|#c4a7d6|#fbfbfb)$/i.test(style.color);
+      const label = colourLabel(node.props.color);
+      const knownToken = label === "token:MOBILE_TEXT_HEADING_PRIMARY" || label === "token:TEXT_DEFAULT";
+      if (!knownStyle && !(style?.color == null && knownToken)) return element;
+      // Preserve the component's colour-prop contract, key, ref and children.
+      const replacement = React.cloneElement(node, { style: [node.props.style, { color: palette.name }] });
+      function replace(current, index) {
+        if (index === path.length) return replacement;
+        const part = path[index];
+        if (part === "children") return React.cloneElement(current, { children: replace(current.props.children, index + 1) });
+        const copy = current.slice(); copy[part] = replace(current[part], index + 1); return copy;
+      }
+      const result = replace(element, 0);
+      stats.rowNames++; stats.changed++;
+      note("gezielt", "Chatzeile.Name", style?.color ?? node.props.color, palette.name);
+      return result;
+    } catch { return element; }
   }
 
   function patchFactory(module, key, seen) {
@@ -221,7 +274,7 @@
         }
         const element = original.apply(this, args);
         observeContext(args[0], props, element);
-        return element;
+        return recolorRowName(element);
       }));
       stats.hooks.push(key);
     } catch { stats.failures.push(key); }
@@ -234,6 +287,7 @@
       `Nicht verfügbar: ${stats.failures.join(", ") || "keine"}`,
       `Farbaufrufe: ${stats.resolver}; erkannte Tokens: ${stats.named}`,
       `Darstellungselemente: ${stats.elements}; Stiländerungen: ${stats.changed}`,
+      `Gezielte Regeln seit Laden: Chatnamen ${stats.rowNames}; Profilleisten ${stats.panels}`,
       `Zuordnungen über Render-Eltern: ${ownersSeen}; verworfene Einträge: ${dropped}`,
       "Keine Chattexte oder Kontodaten erfasst. Kein Upload.",
       "Messung: " + (recording ? "läuft" : "gestoppt"),
@@ -249,7 +303,7 @@
     const button = (label, onPress) => e(RN.TouchableOpacity, { style: buttonStyle, onPress },
       e(RN.Text, { style: { color: "#FFFFFF", fontSize: 16 } }, label));
     return e(RN.ScrollView, { style: { backgroundColor: "#351923" }, contentContainerStyle: { padding: 18 } },
-      e(RN.Text, { style: textStyle }, "Peaches 15.1 · Erweiterte Diagnose, Farben wie 15.0"),
+      e(RN.Text, { style: textStyle }, "Peaches 15.2 · Rosa Übersichtsnamen und altrosa Profilleiste"),
       e(RN.Text, { style: textStyle }, "Falls noch etwas grau bleibt: Messung starten, zur betroffenen Ansicht wechseln, dann hierher zurückkommen und Bericht kopieren. Es werden nur Farbwerte gezählt."),
       button("Messung starten (30 Sekunden)", () => {
         startRecording();

@@ -1,13 +1,13 @@
 {
   "name": "Peaches Onyx Fix",
-  "description": "Version 15.1: gleiche Farbregeln wie 15.0, erweiterte lokale Diagnose und einmalige Messung ab App-Neustart. Namen und Profilleiste noch in Untersuchung.",
+  "description": "Version 15.2: gezielte rosa Übersichtsnamen und altrosa Profilleiste anhand der Diagnose 15.1; bestätigte Chatfarben erhalten. Mit getrennten Trefferzählern.",
   "authors": [
     {
       "name": "Peaches"
     }
   ],
   "main": "index.js",
-  "hash": "52e3bde183fb2af62cbc087ef660b768b48ce945a20e14b67c2a5687fff6194a",
+  "hash": "74483cffd41d6921789a37c8534eb0d869e8c96483d5a620e66a5d5bb5155c52",
   "vendetta": {
     "icon": "ic_theme_24px"
   }
