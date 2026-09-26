@@ -1,13 +1,13 @@
 {
   "name": "Peaches Onyx Fix",
-  "description": "Version 15: korrigierte Revenge-Schnittstellen, wiederhergestellte Chatfarben und lokale Farbdiagnose. Darstellung auf dem Gerät noch zu bestätigen.",
+  "description": "Version 15.1: gleiche Farbregeln wie 15.0, erweiterte lokale Diagnose und einmalige Messung ab App-Neustart. Namen und Profilleiste noch in Untersuchung.",
   "authors": [
     {
       "name": "Peaches"
     }
   ],
   "main": "index.js",
-  "hash": "d76f177bf2d6be44bd468c4c349b5737a4d06036275bf9b8ef8e4e4ad8e724a7",
+  "hash": "52e3bde183fb2af62cbc087ef660b768b48ce945a20e14b67c2a5687fff6194a",
   "vendetta": {
     "icon": "ic_theme_24px"
   }
