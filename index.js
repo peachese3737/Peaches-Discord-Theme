@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   // Peaches 15: API repairs + restoration. No native payload hooks.
-  const VERSION = "15.6";
+  const VERSION = "15.7";
   const { after, instead } = vendetta.patcher;
   const metro = vendetta.metro;
   const tokens = metro.findByProps("SemanticColor");
@@ -12,6 +12,30 @@
   let textSurfaces = new WeakSet();
   let textRenderCalls = 0;
   let lateNames = 0;
+  let themeRefresh = "noch nicht angefordert";
+
+  function refreshSelectedTheme() {
+    // Revenge's public compatibility API increments the theme key and uses
+    // its normal appearance update. Reuse only the currently selected local
+    // theme. No downloads, default-theme switch, store dispatch or timer.
+    const api = vendetta.themes;
+    if (typeof api?.getCurrentTheme !== "function" || typeof api?.selectTheme !== "function") {
+      themeRefresh = "nicht verfügbar"; return;
+    }
+    try {
+      const current = api.getCurrentTheme();
+      const id = current?.id;
+      if (typeof id !== "string" || !id || !api.themes?.[id]?.selected) {
+        themeRefresh = "übersprungen: kein eindeutig ausgewähltes Theme"; return;
+      }
+      themeRefresh = "angefordert";
+      const result = api.selectTheme(id);
+      if (result && typeof result.then === "function") {
+        result.then(() => { if (active) themeRefresh = "API-Aufruf abgeschlossen"; },
+          () => { if (active) themeRefresh = "API-Aufruf fehlgeschlagen"; });
+      } else themeRefresh = "API-Aufruf abgeschlossen";
+    } catch { themeRefresh = "API-Aufruf fehlgeschlagen"; }
+  }
   const stats = { resolver: 0, named: 0, elements: 0, changed: 0, rowNames: 0, panels: 0, statusBars: 0, viewPanels: 0, viewGrey: 0, viewBrand: 0, headers: 0, hooks: [], failures: [] };
   const observed = new Map();
   let recording = false;
@@ -137,7 +161,7 @@
     if (before === undefined && next === undefined) return;
     const key = `${source} ${name || "unbekannt"}: ${colourLabel(before)} -> ${colourLabel(next)}`;
     if (observed.has(key)) observed.set(key, observed.get(key) + 1);
-    else if (observed.size < 239) observed.set(key, 1);
+    else if (observed.size < 238) observed.set(key, 1);
     else dropped++;
   }
 
@@ -426,6 +450,7 @@
       `Gezielte Regeln seit Laden: Chatnamen ${stats.rowNames}; Profilleisten ${stats.panels}; Statusleisten ${stats.statusBars}`,
       `Späte Flächen: Profilleisten ${stats.viewPanels}; Grau ${stats.viewGrey}; Discord-Blau ${stats.viewBrand}; Kopfzeilen ${stats.headers}`,
       `Laufzeitprüfung: ${hookHealth()}; Text-Render ${textRenderCalls}; späte Namen ${lateNames}`,
+      `Theme nach Hook-Start: ${themeRefresh}`,
       `Zuordnungen über Render-Eltern: ${ownersSeen}; verworfene Einträge: ${dropped}`,
       "Keine Chattexte oder Kontodaten erfasst. Kein Upload.",
       "Messung: " + (recording ? "läuft" : "gestoppt"),
@@ -441,7 +466,7 @@
     const button = (label, onPress) => e(RN.TouchableOpacity, { style: buttonStyle, onPress },
       e(RN.Text, { style: { color: "#FFFFFF", fontSize: 16 } }, label));
     return e(RN.ScrollView, { style: { backgroundColor: "#351923" }, contentContainerStyle: { padding: 18 } },
-      e(RN.Text, { style: textStyle }, "Peaches 15.6 · Farbregeln bei wiederholter Darstellung"),
+      e(RN.Text, { style: textStyle }, "Peaches 15.7 · Aktuelles Theme nach Farbregeln anwenden"),
       e(RN.Text, { style: textStyle }, "Falls noch etwas grau bleibt: Messung starten, zur betroffenen Ansicht wechseln, dann hierher zurückkommen und Bericht kopieren. Es werden nur Farbwerte gezählt."),
       button("Messung starten (30 Sekunden)", () => {
         startRecording();
@@ -521,6 +546,7 @@
         installTextSurfaceHooks();
         installStatusBar();
         active = true;
+        refreshSelectedTheme();
         if (vendetta.plugin?.storage?.peachesRecordNextStart === true) {
           vendetta.plugin.storage.peachesRecordNextStart = false;
           startRecording();

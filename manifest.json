@@ -1,13 +1,13 @@
 {
   "name": "Peaches Onyx Fix",
-  "description": "Version 15.6: direkte View-/Text-Renderregeln gegen ausgelassene Farbkorrekturen durch gespeicherte JSX-Funktionen; Laufzeitprüfung ergänzt. Palette beibehalten. Geräte-Stabilität noch zu bestätigen.",
+  "description": "Version 15.7: ausgewähltes lokales Theme einmal nach Installation der Farbregeln erneut anwenden. Farbpalette aus 15.6 unverändert; Startstatus im Bericht. Gerätestabilität noch zu bestätigen.",
   "authors": [
     {
       "name": "Peaches"
     }
   ],
   "main": "index.js",
-  "hash": "8b36fb47d760f0798621e3281c97e4718c4103e87e943b4d578025e9baced333",
+  "hash": "4dccb970bda6e300f1620a9afa6ab48228b321c9c0cc442f188c2468b1fedd6b",
   "vendetta": {
     "icon": "ic_theme_24px"
   }
