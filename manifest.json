@@ -1,13 +1,13 @@
 {
   "name": "Peaches Onyx Fix",
-  "description": "Version 15.4: bestätigte rosa Karten erhalten, Listen-Schriftstile ergänzt, Android-Leiste schwarz mit weißer Schrift ohne zusätzlichen Stackeintrag. Ursprüngliche Stilstruktur erhalten.",
+  "description": "Version 15.6: direkte View-/Text-Renderregeln gegen ausgelassene Farbkorrekturen durch gespeicherte JSX-Funktionen; Laufzeitprüfung ergänzt. Palette beibehalten. Geräte-Stabilität noch zu bestätigen.",
   "authors": [
     {
       "name": "Peaches"
     }
   ],
   "main": "index.js",
-  "hash": "72b073be536b21479e6db6aa87ba734a2b340b52e93df14f680227d538aa953b",
+  "hash": "8b36fb47d760f0798621e3281c97e4718c4103e87e943b4d578025e9baced333",
   "vendetta": {
     "icon": "ic_theme_24px"
   }

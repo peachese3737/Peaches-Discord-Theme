@@ -1,20 +1,36 @@
 (() => {
   "use strict";
   // Peaches 15: API repairs + restoration. No native payload hooks.
-  const VERSION = "15.4";
+  const VERSION = "15.6";
   const { after, instead } = vendetta.patcher;
   const metro = vendetta.metro;
   const tokens = metro.findByProps("SemanticColor");
   const resolver = tokens?.default?.meta ?? tokens?.default?.internal;
   const { React, ReactNative: RN, clipboard } = metro.common;
   const unpatches = [];
-  const stats = { resolver: 0, named: 0, elements: 0, changed: 0, rowNames: 0, panels: 0, statusBars: 0, hooks: [], failures: [] };
+  const hookChecks = [];
+  let textSurfaces = new WeakSet();
+  let textRenderCalls = 0;
+  let lateNames = 0;
+  const stats = { resolver: 0, named: 0, elements: 0, changed: 0, rowNames: 0, panels: 0, statusBars: 0, viewPanels: 0, viewGrey: 0, viewBrand: 0, headers: 0, hooks: [], failures: [] };
   const observed = new Map();
   let recording = false;
   let timer;
   let active = false;
   let dropped = 0;
   let ownersSeen = 0;
+
+  function trackHook(target, key, label) {
+    hookChecks.push({ target, key, label, installed: target[key] });
+  }
+
+  function hookHealth() {
+    const changed = hookChecks.filter(h => {
+      try { return h.target[h.key] !== h.installed; } catch { return true; }
+    });
+    return changed.length ? "Funktionsreferenz verändert: " + changed.map(h => h.label).join(", ") :
+      `${hookChecks.length} Funktionsreferenzen unverändert`;
+  }
 
   const palette = Object.freeze({
     name: "#F0A0C8", preview: "#C4A7D6", header: "#1C0D2A",
@@ -121,7 +137,7 @@
     if (before === undefined && next === undefined) return;
     const key = `${source} ${name || "unbekannt"}: ${colourLabel(before)} -> ${colourLabel(next)}`;
     if (observed.has(key)) observed.set(key, observed.get(key) + 1);
-    else if (observed.size < 240) observed.set(key, 1);
+    else if (observed.size < 239) observed.set(key, 1);
     else dropped++;
   }
 
@@ -244,6 +260,100 @@
     return props;
   }
 
+  function headerProps(props, owner) {
+    if (!props || typeof props !== "object") return props;
+    // Native navigation headers can receive backgroundColor outside `style`.
+    // Only the recorded neutral grey is added; coloured chat headers bypass it.
+    const grey = value => typeof value === "string" && /^#242429$/i.test(value);
+    let next = props;
+    function edit(key, value) {
+      if (next === props) next = { ...props };
+      next[key] = value; stats.headers++;
+    }
+    try {
+      if (["ScreenStackHeaderConfig", "RNSScreenStackHeaderConfig"].includes(owner) && grey(props.backgroundColor)) {
+        edit("backgroundColor", palette.composer);
+      }
+      if (props.headerConfig && typeof props.headerConfig === "object" && grey(props.headerConfig.backgroundColor)) {
+        edit("headerConfig", { ...props.headerConfig, backgroundColor: palette.composer });
+      }
+      const flat = props.headerStyle == null ? null : RN.StyleSheet.flatten(props.headerStyle);
+      if (grey(flat?.backgroundColor)) edit("headerStyle", [props.headerStyle, { backgroundColor: palette.composer }]);
+    } catch { return props; }
+    return next;
+  }
+
+  function lateViewProps(props) {
+    if (!props || props.style == null) return props;
+    try {
+      const flat = RN.StyleSheet.flatten(props.style);
+      const bg = flat?.backgroundColor;
+      if (typeof bg !== "string") return props;
+      let target, counter;
+      if (flat.height === 60 && flat.borderRadius === 30 && /^(#242429|#3b1a2e)$/i.test(bg)) {
+        target = palette.panel; counter = "viewPanels";
+      } else if (/^#5865f2$/i.test(bg)) {
+        target = palette.button; counter = "viewBrand";
+      } else if (/^#242429$/i.test(bg)) {
+        target = palette.composer; counter = "viewGrey";
+      }
+      if (!target) return props;
+      stats[counter]++; stats.changed++;
+      note("View.render", counter, bg, target);
+      return { ...props, style: [props.style, { backgroundColor: target }] };
+    } catch { return props; }
+  }
+
+  function installViewSurfaceHook() {
+    // RN View is a forwardRef object. React calls its .render at render time,
+    // even when a caller captured an old JSX factory before plugin loading.
+    // Keep hook order and forwarded ref untouched; no native payload patch.
+    const view = RN.View;
+    if (view?.$$typeof !== Symbol.for("react.forward_ref") || typeof view.render !== "function") {
+      stats.failures.push("View.render: keine passende View-API"); return;
+    }
+    try {
+      unpatches.push(instead("render", view, function (args, original) {
+        args[0] = lateViewProps(args[0]);
+        return original.apply(this, args);
+      }));
+      stats.hooks.push("View.render");
+      trackHook(view, "render", "View.render");
+    } catch { stats.failures.push("View.render"); }
+  }
+
+  function patchTextSurface(type, label) {
+    // Patch only forwardRef objects React already renders; never call a
+    // component during discovery or replace a function component's identity.
+    for (let depth = 0; type?.$$typeof === Symbol.for("react.memo") && depth < 4; depth++) type = type.type;
+    if (type?.$$typeof !== Symbol.for("react.forward_ref") || typeof type.render !== "function") return false;
+    if (textSurfaces.has(type)) return true;
+    try {
+      unpatches.push(instead("render", type, function (args, original) {
+        textRenderCalls++;
+        const before = args[0];
+        args[0] = recolorNameProps(before, label);
+        if (args[0] !== before) lateNames++;
+        return original.apply(this, args);
+      }));
+      textSurfaces.add(type);
+      stats.hooks.push(label + ".render");
+      trackHook(type, "render", label + ".render");
+      return true;
+    } catch { return false; }
+  }
+
+  function installTextSurfaceHooks() {
+    // This Text/LegacyText export pair is also used by Revenge's own UI API.
+    // Saved JSX or importAll copies still point at the same forwardRef object.
+    try {
+      const texts = metro.findByProps("Text", "LegacyText");
+      for (const key of ["Text", "LegacyText"]) {
+        if (!patchTextSurface(texts?.[key], key)) stats.failures.push(key + ".render: keine passende API");
+      }
+    } catch { stats.failures.push("Text/LegacyText: Suche fehlgeschlagen"); }
+  }
+
   function installStatusBar() {
     const bar = RN.StatusBar;
     if (typeof bar?.setBarStyle !== "function") {
@@ -296,11 +406,13 @@
         }
         args[1] = recolorNameProps(args[1], owner);
         args[1] = lightStatusProps(args[0], args[1], owner);
+        args[1] = headerProps(args[1], owner);
         const element = original.apply(this, args);
         observeContext(args[0], props, element);
         return element;
       }));
       stats.hooks.push(key);
+      trackHook(module, key, key);
     } catch { stats.failures.push(key); }
   }
 
@@ -312,6 +424,8 @@
       `Farbaufrufe: ${stats.resolver}; erkannte Tokens: ${stats.named}`,
       `Darstellungselemente: ${stats.elements}; Stiländerungen: ${stats.changed}`,
       `Gezielte Regeln seit Laden: Chatnamen ${stats.rowNames}; Profilleisten ${stats.panels}; Statusleisten ${stats.statusBars}`,
+      `Späte Flächen: Profilleisten ${stats.viewPanels}; Grau ${stats.viewGrey}; Discord-Blau ${stats.viewBrand}; Kopfzeilen ${stats.headers}`,
+      `Laufzeitprüfung: ${hookHealth()}; Text-Render ${textRenderCalls}; späte Namen ${lateNames}`,
       `Zuordnungen über Render-Eltern: ${ownersSeen}; verworfene Einträge: ${dropped}`,
       "Keine Chattexte oder Kontodaten erfasst. Kein Upload.",
       "Messung: " + (recording ? "läuft" : "gestoppt"),
@@ -327,7 +441,7 @@
     const button = (label, onPress) => e(RN.TouchableOpacity, { style: buttonStyle, onPress },
       e(RN.Text, { style: { color: "#FFFFFF", fontSize: 16 } }, label));
     return e(RN.ScrollView, { style: { backgroundColor: "#351923" }, contentContainerStyle: { padding: 18 } },
-      e(RN.Text, { style: textStyle }, "Peaches 15.4 · Listen-Schriftstile und schwarze Android-Leiste"),
+      e(RN.Text, { style: textStyle }, "Peaches 15.6 · Farbregeln bei wiederholter Darstellung"),
       e(RN.Text, { style: textStyle }, "Falls noch etwas grau bleibt: Messung starten, zur betroffenen Ansicht wechseln, dann hierher zurückkommen und Bericht kopieren. Es werden nur Farbwerte gezählt."),
       button("Messung starten (30 Sekunden)", () => {
         startRecording();
@@ -359,6 +473,7 @@
       try { undo(); } catch { /* Continue removing other hooks. */ }
     }
     active = false;
+    hookChecks.length = 0; textSurfaces = new WeakSet();
     observed.clear();
   }
 
@@ -379,6 +494,7 @@
           return result;
         }));
         stats.hooks.push("resolveSemanticColor");
+        trackHook(resolver, "resolveSemanticColor", "resolveSemanticColor");
         if (typeof RN.processColor === "function") {
           try {
             unpatches.push(instead("processColor", RN, function (args, original) {
@@ -388,6 +504,7 @@
               return original.apply(this, args);
             }));
             stats.hooks.push("processColor");
+            trackHook(RN, "processColor", "processColor");
           } catch { stats.failures.push("processColor"); }
         }
         const seen = new WeakMap();
@@ -400,6 +517,8 @@
             for (const key of ["jsx", "jsxs", "jsxDEV"]) patchFactory(mod, key, seen);
           }
         } else stats.failures.push("findByPropsAll");
+        installViewSurfaceHook();
+        installTextSurfaceHooks();
         installStatusBar();
         active = true;
         if (vendetta.plugin?.storage?.peachesRecordNextStart === true) {
